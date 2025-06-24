@@ -38,17 +38,17 @@
         <!-- Header -->
         <header class="text-center mb-6">
             <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูลเป็น JSON อัตโนมัติ</h1>
-            <p class="text-gray-400 mt-2">วางข้อมูลทางด้านซ้าย แล้วจะแปลงผลลัพธ์เป็น JSON โดยอัตโนมัติทางด้านขวา</p>
+            <p class="text-gray-400 mt-2">วางข้อมูลดิบของคุณทางด้านซ้าย แล้วผลลัพธ์ JSON จะปรากฏทางด้านขวา</p>
         </header>
 
         <!-- Main Content: Input and Output -->
         <main class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             <!-- Input Column -->
             <div class="flex flex-col">
-                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">นำเข้าข้อความ (Input)</label>
+                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลดิบ (Input)</label>
                 <textarea id="rawDataInput" 
                           class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm"
-                          placeholder="วางข้อมูลที่คั่นด้วย | และ \r\n ที่นี่..."></textarea>
+                          placeholder="วางข้อมูลที่คั่นด้วย | หรือข้อมูล JSON ที่นี่..."></textarea>
             </div>
 
             <!-- Output Column -->
@@ -61,29 +61,18 @@
         </main>
 
         <!-- Action Buttons -->
-        <footer class="w-full mt-6 flex flex-col justify-center items-center gap-4">
-            <div class="flex flex-col sm:flex-row gap-4 items-center justify-center w-full max-w-2xl">
-                <button id="copyBtn" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200">
-                    คัดลอก (Copy)
-                </button>
-                <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors duration-200">
-                    ล้างข้อมูล (Clear)
-                </button>
-            </div>
-            
-            <div class="text-center text-gray-500 text-xs mt-8 pb-4 w-full max-w-2xl">
-                <p>Created by <a href="https://github.com/chaiwat20180" class="text-blue-500 hover:underline" target="_blank">Chaiwat Kwanta</a></p>
-                <p>© 2025 - <span id="currentYear"></span> All rights reserved.</p>
-            </div>
+        <footer class="w-full mt-6 flex justify-center items-center gap-4">
+            <button id="copyBtn" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200">
+                คัดลอก (Copy)
+            </button>
+            <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors duration-200">
+                ล้างข้อมูล (Clear)
+            </button>
         </footer>
-
     </div>
 
     <script>
         $(document).ready(function() {
-            //Set the current year
-            $('#currentYear').text(new Date().getFullYear());
-
             // Function to perform the conversion
             function convertToJson() {
                 let rawInput = $('#rawDataInput').val();
@@ -94,36 +83,41 @@
                     return;
                 }
 
+                let processedInput = rawInput.trim();
+
+                // --- NEW LOGIC: First, try to parse as-is JSON ---
+                try {
+                    const parsedJson = JSON.parse(processedInput);
+                    // If parsing is successful, it's valid JSON. Just format it.
+                    const formattedJson = JSON.stringify(parsedJson, null, 4);
+                    outputElement.text(formattedJson);
+                    return; // Exit function if successful
+                } catch (e) {
+                    // Not a valid JSON string, so we'll ignore the error and fall through to the custom logic.
+                }
+
+
+                // --- FALLBACK: Process as pipe-separated string ---
                 try {
                     // Pre-process the input to handle common pasting issues.
-                    // 1. Trim whitespace.
-                    let processedInput = rawInput.trim();
-
-                    // 2. Strip surrounding quotes if they exist.
                     if ((processedInput.startsWith('"') && processedInput.endsWith('"')) || (processedInput.startsWith("'") && processedInput.endsWith("'"))) {
                         processedInput = processedInput.substring(1, processedInput.length - 1);
                     }
-
-                    // 3. Replace literal escape sequences like '\\r' with actual characters like '\r'.
                     processedInput = processedInput.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
 
-                    // Find the first newline-like character to separate headers from values.
                     const separatorMatch = processedInput.match(/\r\n|\r|\n/);
                     if (!separatorMatch) {
-                        outputElement.text(''); // No separator found, cannot process.
+                        outputElement.text(''); // No separator found for pipe-separated logic
                         return;
                     }
                     
                     const separatorIndex = separatorMatch.index;
 
-                    // Split the input into header and value strings based on the separator.
                     const headerString = processedInput.substring(0, separatorIndex).trim();
                     let valueString = processedInput.substring(separatorIndex + separatorMatch[0].length).trim();
                     
-                    // Process headers: remove all leading/trailing pipes, then split.
                     const headers = headerString.replace(/^\|+|\|+$/g, '').split('|').map(h => h.trim());
                     
-                    // Process values: robustly handle various delimiters.
                     const unifiedValueString = valueString.replace(/[\t\s]*\|[\t\s]*/g, '|').replace(/\t/g, '|');
                     const cleanValueString = unifiedValueString.replace(/^\|+|\|+$/g, '');
                     const values = cleanValueString.split('|').map(v => v.trim());
@@ -131,17 +125,14 @@
                     // Manually build the output string to allow for duplicate keys visually.
                     const resultLines = [];
                     headers.forEach((key, index) => {
-                        // Only process if the key is not an empty string.
                         if (key) {
                             const value = values[index] || '';
-                            // Use JSON.stringify on the value to correctly handle quotes and escapes.
                             const formattedValue = JSON.stringify(value);
                             resultLines.push(`    "${key}": ${formattedValue}`);
                         }
                     });
 
                     if (resultLines.length > 0) {
-                        // Join all lines with a comma and a newline, then wrap in curly braces.
                         const outputString = '{\n' + resultLines.join(',\n') + '\n}';
                         outputElement.text(outputString);
                     } else {
@@ -174,7 +165,6 @@
                         }, 2000);
                     }).catch(err => {
                         console.error('ไม่สามารถคัดลอกได้: ', err);
-                        // Fallback for older browsers
                         const textArea = document.createElement("textarea");
                         textArea.value = jsonText;
                         document.body.appendChild(textArea);
