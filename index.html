@@ -40,10 +40,10 @@
         <!-- Header -->
         <header class="text-center mb-4">
             <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูลเป็น JSON อัตโนมัติ</h1>
-            <p class="text-gray-400 mt-2">วางข้อมูลนำเข้าทางด้านซ้าย แล้วผลลัพธ์จะถูกแปลงเป็น JSON ทางด้านขวา</p>
+            <p class="text-gray-400 mt-2">วางข้อมูลดิบของคุณทางด้านซ้าย แล้วผลลัพธ์ JSON จะปรากฏทางด้านขวา</p>
         </header>
         
-         <!-- Controls Container -->
+        <!-- Controls Container -->
         <div class="w-full max-w-lg mx-auto mb-6">
             <!-- Conversion Type Selector -->
             <div class="mb-4">
@@ -52,6 +52,7 @@
                     <option value="auto">ตรวจจับอัตโนมัติ (Auto-Detect)</option>
                     <option value="json-format">จัดรูปแบบ JSON (Format JSON)</option>
                     <option value="pipe">ข้อความคั่นด้วย | (Pipe-Separated)</option>
+                    <option value="xml">XML to JSON</option>
                 </select>
             </div>
             <!-- Action Buttons -->
@@ -68,15 +69,14 @@
             </div>
         </div>
 
-
         <!-- Main Content: Input and Output -->
         <main class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             <!-- Input Column -->
             <div class="flex flex-col">
-                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลนำเข้า (Input)</label>
+                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลดิบ (Input)</label>
                 <textarea id="rawDataInput" 
                           class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm"
-                          placeholder="วางข้อมูลที่คั่นด้วย | หรือข้อมูล JSON ที่นี่..."></textarea>
+                          placeholder="วางข้อมูลที่คั่นด้วย |, JSON, หรือ XML ที่นี่..."></textarea>
             </div>
 
             <!-- Output Column -->
@@ -87,15 +87,6 @@
                 </div>
             </div>
         </main>
-
-        <!-- Action Buttons -->
-        <footer class="w-full mt-6 flex justify-center items-center flex-wrap gap-4">
-             
-            <div class="text-center text-gray-500 text-xs mt-8 pb-4 w-full max-w-2xl">
-                <p>Created by <a href="https://github.com/chaiwat20180" class="text-blue-500 hover:underline" target="_blank">Chaiwat Kwanta</a></p>
-                <p>© <span id="currentYear"></span> All rights reserved.</p>
-            </div>
-        </footer>
     </div>
 
     <script>
@@ -105,20 +96,10 @@
 
             // --- Data Parsing Functions ---
 
-            /**
-             * Parses a string that is already valid JSON.
-             * @param {string} input The input string.
-             * @returns {object|Array} A JavaScript object or array.
-             */
             function parseJsonString(input) {
                 return JSON.parse(input);
             }
 
-            /**
-             * Parses a pipe-separated string.
-             * @param {string} input The input string.
-             * @returns {Array<object>} An array of key-value pair objects to handle duplicate keys.
-             */
             function parsePipeString(input) {
                 let processedInput = input.trim();
                  if ((processedInput.startsWith('"') && processedInput.endsWith('"')) || (processedInput.startsWith("'") && processedInput.endsWith("'"))) {
@@ -149,15 +130,70 @@
                 return result;
             }
 
+            function parseXmlString(xmlString) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+
+                if (xmlDoc.getElementsByTagName("parsererror").length) {
+                    throw new Error("Invalid XML format");
+                }
+
+                function xmlNodeToJson(node) {
+                    // Base case: if it's a text node with content, return the text
+                    if (node.nodeType === 3 && node.nodeValue.trim()) {
+                        return node.nodeValue.trim();
+                    }
+
+                    if (node.nodeType !== 1) { // Only process element nodes
+                        return null;
+                    }
+                    
+                    // Handle element nodes
+                    const obj = {};
+                    const children = Array.from(node.children);
+
+                    if (children.length > 0) {
+                        children.forEach(child => {
+                            const childName = child.tagName;
+                            let childJson;
+                            
+                            // Special rule for <par> tags as requested
+                            if (child.tagName === 'par' && child.hasAttribute('name')) {
+                                childJson = {
+                                    name: child.getAttribute('name'),
+                                    value: child.textContent.trim()
+                                };
+                            } else {
+                                childJson = xmlNodeToJson(child);
+                            }
+
+                            if (!obj[childName]) {
+                                obj[childName] = childJson;
+                            } else {
+                                if (!Array.isArray(obj[childName])) {
+                                    obj[childName] = [obj[childName]];
+                                }
+                                obj[childName].push(childJson);
+                            }
+                        });
+                    } else if (node.textContent.trim()) {
+                        // If no element children but has text, this becomes the value.
+                        return node.textContent.trim();
+                    }
+                    
+                    return obj;
+                }
+
+                const rootElement = xmlDoc.documentElement;
+                const result = {};
+                result[rootElement.tagName] = xmlNodeToJson(rootElement);
+                return result;
+            }
+
+
              // --- Data Formatting Function ---
 
-            /**
-             * Formats a JavaScript object or array into a string for display.
-             * @param {object|Array} data The data to format.
-             * @returns {string} A formatted string.
-             */
             function formatDataForDisplay(data) {
-                // If the data from pipe-separated is an array of {Key, Value}, format it manually
                 if (Array.isArray(data) && data.every(item => 'Key' in item && 'Value' in item)) {
                     const resultLines = data.map(item => {
                         const formattedValue = JSON.stringify(item.Value);
@@ -165,7 +201,6 @@
                     });
                     return '{\n' + resultLines.join(',\n') + '\n}';
                 }
-                // Otherwise, it's standard JSON, format it normally.
                 return JSON.stringify(data, null, 4);
             }
             
@@ -175,9 +210,10 @@
                 const rawInput = $('#rawDataInput').val();
                 const outputElement = $('#jsonOutput');
                 const type = $('#conversionType').val();
+                const trimmedInput = rawInput.trim();
 
-                lastConvertedData = null; // Reset on each conversion attempt
-                if (!rawInput.trim()) {
+                lastConvertedData = null; 
+                if (!trimmedInput) {
                     outputElement.text('');
                     return;
                 }
@@ -186,20 +222,25 @@
                     let parsedData;
                     switch (type) {
                         case 'auto':
-                            try {
-                                parsedData = parseJsonString(rawInput);
-                            } catch (e) {
-                                parsedData = parsePipeString(rawInput);
+                            if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) {
+                                try { parsedData = parseXmlString(trimmedInput); } catch (e) { throw e; }
+                            } else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
+                                try { parsedData = parseJsonString(trimmedInput); } catch (e) { throw e; }
+                            } else {
+                                try { parsedData = parsePipeString(trimmedInput); } catch (e) { throw e; }
                             }
                             break;
                         case 'json-format':
-                             parsedData = parseJsonString(rawInput);
+                             parsedData = parseJsonString(trimmedInput);
                             break;
                         case 'pipe':
-                            parsedData = parsePipeString(rawInput);
+                            parsedData = parsePipeString(trimmedInput);
+                            break;
+                        case 'xml':
+                            parsedData = parseXmlString(trimmedInput);
                             break;
                     }
-                    lastConvertedData = parsedData; // Store the structured data
+                    lastConvertedData = parsedData; 
                     const displayText = formatDataForDisplay(parsedData);
                     outputElement.text(displayText);
                 } catch (error) {
@@ -207,7 +248,7 @@
                 }
             }
 
-            // --- Export Function (UPDATED) ---
+            // --- Export Function ---
             
             function exportToExcel() {
                 if (!lastConvertedData) {
@@ -218,22 +259,37 @@
                 let dataForSheet;
                 let headerOrder = [];
 
-                // Transform pipe-separated data format into a standard array of objects for consistent export.
-                if (Array.isArray(lastConvertedData) && lastConvertedData.length > 0 && lastConvertedData.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
-                    const singleObject = lastConvertedData.reduce((obj, item) => {
-                        // The last duplicate key wins, which is standard behavior for objects.
+                let dataToProcess = JSON.parse(JSON.stringify(lastConvertedData)); // Deep copy to avoid modifying the original
+                
+                // Unify data structures for consistent export
+                if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
+                    const singleObject = dataToProcess.reduce((obj, item) => {
                         obj[item.Key] = item.Value;
                         return obj;
                     }, {});
-                    dataForSheet = [singleObject]; // Now it's in the same format as a single JSON object.
-                } else {
-                    dataForSheet = lastConvertedData; // Use the data as is.
+                    dataToProcess = singleObject;
+                }
+                
+                // Unwrap single-key root objects (like from XML conversion)
+                const keys = Object.keys(dataToProcess);
+                if (keys.length === 1 && typeof dataToProcess[keys[0]] === 'object' && dataToProcess[keys[0]] !== null) {
+                    dataToProcess = dataToProcess[keys[0]];
                 }
 
-                // Now, determine the header order from the processed data (dataForSheet).
-                if (Array.isArray(dataForSheet)) {
+                // Check for and flatten the special 'parameter' structure from XML
+                if (dataToProcess && dataToProcess.parameter && Array.isArray(dataToProcess.parameter.par)) {
+                    dataToProcess.parameter.par.forEach(p => {
+                        if (p && p.name) {
+                            dataToProcess[p.name] = p.value || '';
+                        }
+                    });
+                    delete dataToProcess.parameter;
+                }
+
+                // Now, determine the header order from the processed data (dataToProcess).
+                if (Array.isArray(dataToProcess)) {
+                    dataForSheet = dataToProcess;
                     if (dataForSheet.length > 0) {
-                        // Find the object with the most keys to use as the template for headers.
                         const mostCompleteObject = dataForSheet.reduce((a, b) => {
                             if (typeof a !== 'object' || a === null) return b;
                             if (typeof b !== 'object' || b === null) return a;
@@ -241,15 +297,14 @@
                         }, {});
 
                         if (typeof mostCompleteObject === 'object' && mostCompleteObject !== null) {
-                            headerOrder = Object.keys(mostCompleteObject); // Preserve order of the most complete object.
+                            headerOrder = Object.keys(mostCompleteObject);
                         }
                     }
-                } else if (typeof dataForSheet === 'object' && dataForSheet !== null) {
-                    // This case handles a single object that might not have been in an array.
-                    headerOrder = Object.keys(dataForSheet);
-                    dataForSheet = [dataForSheet]; // Wrap in array for json_to_sheet
+                } else if (typeof dataToProcess === 'object' && dataToProcess !== null) {
+                    headerOrder = Object.keys(dataToProcess);
+                    dataForSheet = [dataToProcess];
                 } else {
-                     dataForSheet = [{ Value: lastConvertedData }];
+                     dataForSheet = [{ Value: dataToProcess }];
                      headerOrder = ['Value'];
                 }
 
@@ -259,7 +314,6 @@
                 }
 
                 try {
-                    // The 'header' option explicitly sets the column order in the Excel file.
                     const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
