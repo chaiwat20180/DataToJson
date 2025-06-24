@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- jQuery -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <!-- SheetJS (XLSX) for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -36,16 +38,42 @@
 
     <div class="w-full max-w-7xl mx-auto flex flex-col flex-grow">
         <!-- Header -->
-        <header class="text-center mb-6">
+        <header class="text-center mb-4">
             <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูลเป็น JSON อัตโนมัติ</h1>
-            <p class="text-gray-400 mt-2">วางข้อมูลนำเข้าทางด้านซ้าย แล้วผลลัพธ์จะถูกแปลงเป็น JSON ทางด้านขวา</p>
+            <p class="text-gray-400 mt-2">วางข้อมูลดิบของคุณทางด้านซ้าย แล้วผลลัพธ์ JSON จะปรากฏทางด้านขวา</p>
         </header>
+        
+         <!-- Controls Container -->
+        <div class="w-full max-w-lg mx-auto mb-6">
+            <!-- Conversion Type Selector -->
+            <div class="mb-4">
+                <label for="conversionType" class="block text-center text-lg font-semibold mb-2 text-gray-300">ประเภทการแปลง</label>
+                <select id="conversionType" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="auto">ตรวจจับอัตโนมัติ (Auto-Detect)</option>
+                    <option value="json-format">จัดรูปแบบ JSON (Format JSON)</option>
+                    <option value="pipe">ข้อความคั่นด้วย | (Pipe-Separated)</option>
+                </select>
+            </div>
+            <!-- Action Buttons -->
+            <div class="flex justify-center items-center flex-wrap gap-4">
+                <button id="copyBtn" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200">
+                    คัดลอก (Copy)
+                </button>
+                 <button id="exportBtn" class="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-colors duration-200">
+                    ส่งออกเป็น Excel
+                </button>
+                <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors duration-200">
+                    ล้างข้อมูล (Clear)
+                </button>
+            </div>
+        </div>
+
 
         <!-- Main Content: Input and Output -->
         <main class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             <!-- Input Column -->
             <div class="flex flex-col">
-                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลนำเข้า (Input)</label>
+                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลดิบ (Input)</label>
                 <textarea id="rawDataInput" 
                           class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm"
                           placeholder="วางข้อมูลที่คั่นด้วย | หรือข้อมูล JSON ที่นี่..."></textarea>
@@ -61,132 +89,224 @@
         </main>
 
         <!-- Action Buttons -->
-        <footer class="w-full mt-6 flex justify-center items-center gap-4">
-            <button id="copyBtn" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200">
-                คัดลอก (Copy)
-            </button>
-            <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors duration-200">
-                ล้างข้อมูล (Clear)
-            </button>
+        <footer class="w-full mt-6 flex justify-center items-center flex-wrap gap-4">
+             
+            <div class="text-center text-gray-500 text-xs mt-8 pb-4 w-full max-w-2xl">
+                <p>Created by <a href="https://github.com/chaiwat20180" class="text-blue-500 hover:underline" target="_blank">Chaiwat Kwanta</a></p>
+                <p>© <span id="currentYear"></span> All rights reserved.</p>
+            </div>
         </footer>
     </div>
 
     <script>
         $(document).ready(function() {
-            // Function to perform the conversion
-            function convertToJson() {
-                let rawInput = $('#rawDataInput').val();
-                const outputElement = $('#jsonOutput');
+            // A global variable to hold the structured data from the last successful conversion.
+            let lastConvertedData = null;
 
+            // --- Data Parsing Functions ---
+
+            /**
+             * Parses a string that is already valid JSON.
+             * @param {string} input The input string.
+             * @returns {object|Array} A JavaScript object or array.
+             */
+            function parseJsonString(input) {
+                return JSON.parse(input);
+            }
+
+            /**
+             * Parses a pipe-separated string.
+             * @param {string} input The input string.
+             * @returns {Array<object>} An array of key-value pair objects to handle duplicate keys.
+             */
+            function parsePipeString(input) {
+                let processedInput = input.trim();
+                 if ((processedInput.startsWith('"') && processedInput.endsWith('"')) || (processedInput.startsWith("'") && processedInput.endsWith("'"))) {
+                    processedInput = processedInput.substring(1, processedInput.length - 1);
+                }
+                processedInput = processedInput.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+                
+                const separatorMatch = processedInput.match(/\r\n|\r|\n/);
+                if (!separatorMatch) {
+                    throw new Error("ไม่พบตัวคั่นบรรทัดสำหรับรูปแบบ Pipe-Separated");
+                }
+                
+                const separatorIndex = separatorMatch.index;
+                const headerString = processedInput.substring(0, separatorIndex).trim();
+                let valueString = processedInput.substring(separatorIndex + separatorMatch[0].length).trim();
+                
+                const headers = headerString.replace(/^\|+|\|+$/g, '').split('|').map(h => h.trim());
+                const unifiedValueString = valueString.replace(/[\t\s]*\|[\t\s]*/g, '|').replace(/\t/g, '|');
+                const cleanValueString = unifiedValueString.replace(/^\|+|\|+$/g, '');
+                const values = cleanValueString.split('|').map(v => v.trim());
+
+                const result = [];
+                headers.forEach((key, index) => {
+                    if (key) {
+                        result.push({ Key: key, Value: values[index] || '' });
+                    }
+                });
+                return result;
+            }
+
+             // --- Data Formatting Function ---
+
+            /**
+             * Formats a JavaScript object or array into a string for display.
+             * @param {object|Array} data The data to format.
+             * @returns {string} A formatted string.
+             */
+            function formatDataForDisplay(data) {
+                // If the data from pipe-separated is an array of {Key, Value}, format it manually
+                if (Array.isArray(data) && data.every(item => 'Key' in item && 'Value' in item)) {
+                    const resultLines = data.map(item => {
+                        const formattedValue = JSON.stringify(item.Value);
+                        return `    "${item.Key}": ${formattedValue}`;
+                    });
+                    return '{\n' + resultLines.join(',\n') + '\n}';
+                }
+                // Otherwise, it's standard JSON, format it normally.
+                return JSON.stringify(data, null, 4);
+            }
+            
+            // --- Main Conversion Controller ---
+            
+            function convert() {
+                const rawInput = $('#rawDataInput').val();
+                const outputElement = $('#jsonOutput');
+                const type = $('#conversionType').val();
+
+                lastConvertedData = null; // Reset on each conversion attempt
                 if (!rawInput.trim()) {
                     outputElement.text('');
                     return;
                 }
 
-                let processedInput = rawInput.trim();
-
-                // --- NEW LOGIC: First, try to parse as-is JSON ---
                 try {
-                    const parsedJson = JSON.parse(processedInput);
-                    // If parsing is successful, it's valid JSON. Just format it.
-                    const formattedJson = JSON.stringify(parsedJson, null, 4);
-                    outputElement.text(formattedJson);
-                    return; // Exit function if successful
-                } catch (e) {
-                    // Not a valid JSON string, so we'll ignore the error and fall through to the custom logic.
-                }
-
-
-                // --- FALLBACK: Process as pipe-separated string ---
-                try {
-                    // Pre-process the input to handle common pasting issues.
-                    if ((processedInput.startsWith('"') && processedInput.endsWith('"')) || (processedInput.startsWith("'") && processedInput.endsWith("'"))) {
-                        processedInput = processedInput.substring(1, processedInput.length - 1);
+                    let parsedData;
+                    switch (type) {
+                        case 'auto':
+                            try {
+                                parsedData = parseJsonString(rawInput);
+                            } catch (e) {
+                                parsedData = parsePipeString(rawInput);
+                            }
+                            break;
+                        case 'json-format':
+                             parsedData = parseJsonString(rawInput);
+                            break;
+                        case 'pipe':
+                            parsedData = parsePipeString(rawInput);
+                            break;
                     }
-                    processedInput = processedInput.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-
-                    const separatorMatch = processedInput.match(/\r\n|\r|\n/);
-                    if (!separatorMatch) {
-                        outputElement.text(''); // No separator found for pipe-separated logic
-                        return;
-                    }
-                    
-                    const separatorIndex = separatorMatch.index;
-
-                    const headerString = processedInput.substring(0, separatorIndex).trim();
-                    let valueString = processedInput.substring(separatorIndex + separatorMatch[0].length).trim();
-                    
-                    const headers = headerString.replace(/^\|+|\|+$/g, '').split('|').map(h => h.trim());
-                    
-                    const unifiedValueString = valueString.replace(/[\t\s]*\|[\t\s]*/g, '|').replace(/\t/g, '|');
-                    const cleanValueString = unifiedValueString.replace(/^\|+|\|+$/g, '');
-                    const values = cleanValueString.split('|').map(v => v.trim());
-
-                    // Manually build the output string to allow for duplicate keys visually.
-                    const resultLines = [];
-                    headers.forEach((key, index) => {
-                        if (key) {
-                            const value = values[index] || '';
-                            const formattedValue = JSON.stringify(value);
-                            resultLines.push(`    "${key}": ${formattedValue}`);
-                        }
-                    });
-
-                    if (resultLines.length > 0) {
-                        const outputString = '{\n' + resultLines.join(',\n') + '\n}';
-                        outputElement.text(outputString);
-                    } else {
-                        outputElement.text('');
-                    }
-
+                    lastConvertedData = parsedData; // Store the structured data
+                    const displayText = formatDataForDisplay(parsedData);
+                    outputElement.text(displayText);
                 } catch (error) {
-                    outputElement.text('เกิดข้อผิดพลาดในการแปลงข้อมูล:\n' + error.message);
+                    outputElement.text(`เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`);
                 }
             }
 
-            // Event listener for input changes (triggers on paste, cut, typing).
-            $('#rawDataInput').on('input', convertToJson);
+            // --- Export Function (UPDATED) ---
+            
+            function exportToExcel() {
+                if (!lastConvertedData) {
+                    alert('ไม่มีข้อมูลสำหรับส่งออก กรุณาแปลงข้อมูลก่อน');
+                    return;
+                }
+                
+                let dataForSheet;
+                let headerOrder = [];
 
-            // Event listener for the Clear button.
+                // Transform pipe-separated data format into a standard array of objects for consistent export.
+                if (Array.isArray(lastConvertedData) && lastConvertedData.length > 0 && lastConvertedData.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
+                    const singleObject = lastConvertedData.reduce((obj, item) => {
+                        // The last duplicate key wins, which is standard behavior for objects.
+                        obj[item.Key] = item.Value;
+                        return obj;
+                    }, {});
+                    dataForSheet = [singleObject]; // Now it's in the same format as a single JSON object.
+                } else {
+                    dataForSheet = lastConvertedData; // Use the data as is.
+                }
+
+                // Now, determine the header order from the processed data (dataForSheet).
+                if (Array.isArray(dataForSheet)) {
+                    if (dataForSheet.length > 0) {
+                        // Find the object with the most keys to use as the template for headers.
+                        const mostCompleteObject = dataForSheet.reduce((a, b) => {
+                            if (typeof a !== 'object' || a === null) return b;
+                            if (typeof b !== 'object' || b === null) return a;
+                            return Object.keys(a).length > Object.keys(b).length ? a : b;
+                        }, {});
+
+                        if (typeof mostCompleteObject === 'object' && mostCompleteObject !== null) {
+                            headerOrder = Object.keys(mostCompleteObject); // Preserve order of the most complete object.
+                        }
+                    }
+                } else if (typeof dataForSheet === 'object' && dataForSheet !== null) {
+                    // This case handles a single object that might not have been in an array.
+                    headerOrder = Object.keys(dataForSheet);
+                    dataForSheet = [dataForSheet]; // Wrap in array for json_to_sheet
+                } else {
+                     dataForSheet = [{ Value: lastConvertedData }];
+                     headerOrder = ['Value'];
+                }
+
+                if (!dataForSheet || dataForSheet.length === 0) {
+                    alert('ไม่มีข้อมูลที่สามารถส่งออกได้');
+                    return;
+                }
+
+                try {
+                    // The 'header' option explicitly sets the column order in the Excel file.
+                    const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+                    XLSX.writeFile(workbook, "ExportedData.xlsx");
+                } catch (error) {
+                    alert(`เกิดข้อผิดพลาดในการส่งออก: ${error.message}`);
+                }
+            }
+
+
+            // --- Event Listeners ---
+            $('#rawDataInput').on('input', convert);
+            $('#conversionType').on('change', convert);
+            $('#exportBtn').on('click', exportToExcel);
+
             $('#clearBtn').on('click', function() {
                 $('#rawDataInput').val('');
                 $('#jsonOutput').text('');
+                lastConvertedData = null;
             });
 
-            // Event listener for the Copy button.
             $('#copyBtn').on('click', function() {
                 const jsonText = $('#jsonOutput').text();
-                if (jsonText) {
+                if (jsonText && !jsonText.startsWith('เกิดข้อผิดพลาด')) {
                     navigator.clipboard.writeText(jsonText).then(() => {
                         const originalText = $(this).text();
-                        $(this).text('คัดลอกแล้ว! (Copied!)');
+                        $(this).text('คัดลอกแล้ว!');
                         setTimeout(() => {
                             $(this).text(originalText);
                         }, 2000);
                     }).catch(err => {
-                        console.error('ไม่สามารถคัดลอกได้: ', err);
+                        console.error('Could not copy text: ', err);
                         const textArea = document.createElement("textarea");
                         textArea.value = jsonText;
                         document.body.appendChild(textArea);
-                        textArea.focus();
                         textArea.select();
                         try {
                             document.execCommand('copy');
-                            const originalText = $(this).text();
-                            $(this).text('คัดลอกแล้ว! (Copied!)');
-                            setTimeout(() => {
-                                $(this).text(originalText);
-                            }, 2000);
-                        } catch (err) {
-                            alert('ขออภัย, ไม่สามารถคัดลอกได้');
+                        } finally {
+                            document.body.removeChild(textArea);
                         }
-                        document.body.removeChild(textArea);
                     });
                 }
             });
 
-            // Trigger conversion on load just in case there's text from browser cache.
-            convertToJson();
+            // Initial conversion on load
+            convert();
         });
     </script>
 
