@@ -3,16 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ตัวแปลงข้อมูลเป็น JSON</title>
+    <title>ตัวแปลงข้อมูลเป็น JSON พร้อมอัปโหลดไปยัง Google Drive</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- jQuery -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <!-- SheetJS (XLSX) for Excel Export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <!-- SweetAlert2 for notifications -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- **NEW** More reliable way to load Google API scripts -->
+    <!-- The onload attributes will call the global functions once the scripts are loaded -->
+    <script src="https://apis.google.com/js/api.js?onload=gapiLoaded" async defer></script>
+    <script src="https://accounts.google.com/gsi/client?onload=onGoogleLibraryLoad" async defer></script>
+    
     <style>
         body {
             font-family: 'Sarabun', 'Inter', sans-serif;
@@ -39,12 +48,12 @@
     <div class="w-full max-w-7xl mx-auto flex flex-col flex-grow">
         <!-- Header -->
         <header class="text-center mb-4">
-            <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูลเป็น JSON อัตโนมัติ</h1>
-            <p class="text-gray-400 mt-2">วางข้อมูลนำเข้าทางด้านซ้าย แล้วผลลัพธ์จะถูกแปลงเป็น JSON ทางด้านขวา</p>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูล JSON และอัปโหลดไป Google Drive</h1>
+            <p class="text-gray-400 mt-2">วางข้อมูล > แปลงเป็น JSON > อัปโหลดไฟล์ Excel ไปยัง Google Drive</p>
         </header>
         
         <!-- Controls Container -->
-        <div class="w-full max-w-lg mx-auto mb-6">
+        <div class="w-full max-w-2xl mx-auto mb-6">
             <!-- Conversion Type Selector -->
             <div class="mb-4">
                 <label for="conversionType" class="block text-center text-lg font-semibold mb-2 text-gray-300">ประเภทการแปลง</label>
@@ -57,16 +66,14 @@
             </div>
             <!-- Action Buttons -->
             <div class="flex justify-center items-center flex-wrap gap-4">
-                <button id="copyBtn" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200">
-                    คัดลอก (Copy)
-                </button>
-                 <button id="exportBtn" class="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-colors duration-200">
-                    ส่งออกเป็น Excel
-                </button>
-                <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors duration-200">
-                    ล้างข้อมูล (Clear)
-                </button>
+                <button id="authorize_button" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">ลงชื่อเข้าใช้ Google</button>
+                <button id="signout_button" style="display: none;" class="px-6 py-2 bg-yellow-600 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-700">ออกจากระบบ Google</button>
+                
+                <button id="copyBtn" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">คัดลอก JSON</button>
+                <button id="uploadBtn" class="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 opacity-50 cursor-not-allowed" disabled>Export & Upload to Drive</button>
+                <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700">ล้างข้อมูล</button>
             </div>
+             <div id="auth-status" class="text-center mt-3 text-sm text-gray-400">กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์</div>
         </div>
 
         <!-- Main Content: Input and Output -->
@@ -90,279 +97,300 @@
     </div>
 
     <script>
-        $(document).ready(function() {
-            // A global variable to hold the structured data from the last successful conversion.
-            let lastConvertedData = null;
+    // --- Google Drive API Configuration ---
+    // สำคัญ: ใส่ Google API Key และ Client ID ของคุณที่นี่
+    // คำแนะนำ: เพื่อให้ทำงานได้ถูกต้อง คุณต้องเปิดไฟล์นี้ผ่าน Web Server (เช่น http://localhost:5500)
+    // ไม่ใช่เปิดโดยตรง (file://...). หากใช้ VS Code แนะนำให้ติดตั้ง Extension ชื่อ "Live Server"
+    const API_KEY = 'AIzaSyCShTHlV2oFr7QMNetG81V_x99zeDXBUtU'; 
+    const CLIENT_ID = '839014236860-pfb60nkl7klpej2bf67tsh5qhjnttei9.apps.googleusercontent.com';
 
-            // --- Data Parsing Functions ---
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    const FOLDER_NAME = 'ExportJson';
 
-            function parseJsonString(input) {
-                return JSON.parse(input);
-            }
+    let tokenClient;
+    let gapiInited = false;
+    let gisInited = false;
+    let lastConvertedData = null;
 
-            function parsePipeString(input) {
-                let processedInput = input.trim();
-                 if ((processedInput.startsWith('"') && processedInput.endsWith('"')) || (processedInput.startsWith("'") && processedInput.endsWith("'"))) {
-                    processedInput = processedInput.substring(1, processedInput.length - 1);
+    // --- UI Elements ---
+    const authorizeButton = $('#authorize_button');
+    const signoutButton = $('#signout_button');
+    const uploadButton = $('#uploadBtn');
+    const authStatusDiv = $('#auth-status');
+
+    // --- Global onload callbacks for Google Scripts ---
+    // This function is called when the GAPI client library has loaded.
+    function gapiLoaded() {
+        gapi.load('client', () => {
+            gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+            }).then(() => {
+                gapiInited = true;
+                console.log("Google API Client (GAPI) initialized.");
+            }).catch(err => {
+                console.error("Error initializing GAPI client:", err);
+                Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error');
+            });
+        });
+    }
+
+    // This function is called when the GSI client library has loaded.
+    function onGoogleLibraryLoad() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (tokenResponse) => { // Callback after user grants consent
+                console.log("Received token response:", tokenResponse); // Log the full response for debugging
+                
+                // **IMPROVED ERROR HANDLING**
+                if (tokenResponse.error !== undefined) {
+                    console.error("Google token error:", tokenResponse);
+                    const errorDetails = tokenResponse.error_description || tokenResponse.error;
+                    Swal.fire('เกิดข้อผิดพลาดในการยืนยันตัวตน', `Google แจ้งว่า: ${errorDetails}`, 'error');
+                    updateSigninStatus(false);
+                    return;
                 }
-                processedInput = processedInput.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
                 
-                const separatorMatch = processedInput.match(/\r\n|\r|\n/);
-                if (!separatorMatch) {
-                    throw new Error("ไม่พบตัวคั่นบรรทัดสำหรับรูปแบบ Pipe-Separated");
+                if (tokenResponse.access_token) {
+                    console.log("Access Token received successfully.");
+                    gapi.client.setToken(tokenResponse);
+                    updateSigninStatus(true);
+                } else {
+                    console.error("No access token received in the response.");
+                    Swal.fire('เกิดข้อผิดพลาด', 'ไม่ได้รับ Access Token จาก Google', 'error');
+                    updateSigninStatus(false);
                 }
-                
-                const separatorIndex = separatorMatch.index;
-                const headerString = processedInput.substring(0, separatorIndex).trim();
-                let valueString = processedInput.substring(separatorIndex + separatorMatch[0].length).trim();
-                
-                const headers = headerString.replace(/^\|+|\|+$/g, '').split('|').map(h => h.trim());
-                const unifiedValueString = valueString.replace(/[\t\s]*\|[\t\s]*/g, '|').replace(/\t/g, '|');
-                const cleanValueString = unifiedValueString.replace(/^\|+|\|+$/g, '');
-                const values = cleanValueString.split('|').map(v => v.trim());
+            },
+        });
+        gisInited = true;
+        console.log("Google Identity Services (GIS) initialized.");
+    }
 
-                const result = [];
-                headers.forEach((key, index) => {
-                    if (key) {
-                        result.push({ Key: key, Value: values[index] || '' });
+    // --- Main Logic ---
+    $(document).ready(function() {
+        // --- Event Listeners ---
+        authorizeButton.on('click', handleAuthClick);
+        signoutButton.on('click', handleSignoutClick);
+        $('#rawDataInput').on('input', convert);
+        $('#conversionType').on('change', convert);
+        $('#uploadBtn').on('click', exportAndUploadToDrive);
+        $('#clearBtn').on('click', clearAll);
+        $('#copyBtn').on('click', copyJson);
+
+        convert(); // Initial conversion
+    });
+
+    function updateSigninStatus(isSignedIn) {
+        if (isSignedIn) {
+            authorizeButton.hide();
+            signoutButton.show();
+            uploadButton.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
+            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว');
+        } else {
+            authorizeButton.show();
+            signoutButton.hide();
+            uploadButton.prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
+            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์');
+        }
+    }
+
+    function handleAuthClick() {
+        if (!gisInited || !gapiInited) {
+            Swal.fire('กรุณารอสักครู่', 'ไลบรารีกำลังโหลด...', 'info');
+            return;
+        }
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    function handleSignoutClick() {
+        const token = gapi.client.getToken();
+        if (token !== null) {
+            google.accounts.oauth2.revoke(token.access_token, () => {
+                gapi.client.setToken('');
+                updateSigninStatus(false);
+            });
+        }
+    }
+
+    // --- Data Parsing & Formatting (No changes) ---
+    function parseJsonString(input) { return JSON.parse(input); }
+    function parsePipeString(input) {
+        let processedInput = input.trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+        processedInput = processedInput.replace(/\\r/g, '\r').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        const separatorMatch = processedInput.match(/\r\n|\r|\n/);
+        if (!separatorMatch) throw new Error("ไม่พบตัวคั่นบรรทัดสำหรับรูปแบบ Pipe-Separated");
+        const separatorIndex = separatorMatch.index;
+        const headerString = processedInput.substring(0, separatorIndex).trim();
+        let valueString = processedInput.substring(separatorIndex + separatorMatch[0].length).trim();
+        const headers = headerString.replace(/^\|+|\|+$/g, '').split('|').map(h => h.trim());
+        const unifiedValueString = valueString.replace(/[\t\s]*\|[\t\s]*/g, '|').replace(/\t/g, '|');
+        const cleanValueString = unifiedValueString.replace(/^\|+|\|+$/g, '');
+        const values = cleanValueString.split('|').map(v => v.trim());
+        const result = [];
+        headers.forEach((key, index) => {
+            if (key) { result.push({ Key: key, Value: values[index] || '' }); }
+        });
+        return result;
+    }
+    function parseXmlString(xmlString) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+        if (xmlDoc.getElementsByTagName("parsererror").length) throw new Error("Invalid XML format");
+        function xmlNodeToJson(node) {
+            if (node.nodeType === 3 && node.nodeValue.trim()) return node.nodeValue.trim();
+            if (node.nodeType !== 1) return null;
+            const obj = {};
+            const children = Array.from(node.children);
+            if (children.length > 0) {
+                children.forEach(child => {
+                    const childName = child.tagName;
+                    let childJson = (child.tagName === 'par' && child.hasAttribute('name'))
+                        ? { name: child.getAttribute('name'), value: child.textContent.trim() }
+                        : xmlNodeToJson(child);
+                    if (!obj[childName]) obj[childName] = childJson;
+                    else {
+                        if (!Array.isArray(obj[childName])) obj[childName] = [obj[childName]];
+                        obj[childName].push(childJson);
                     }
                 });
-                return result;
+            } else if (node.textContent.trim()) return node.textContent.trim();
+            return obj;
+        }
+        const rootElement = xmlDoc.documentElement;
+        const result = {};
+        result[rootElement.tagName] = xmlNodeToJson(rootElement);
+        return result;
+    }
+    function formatDataForDisplay(data) {
+        if (Array.isArray(data) && data.every(item => 'Key' in item && 'Value' in item)) {
+            const resultLines = data.map(item => `    "${item.Key}": ${JSON.stringify(item.Value)}`);
+            return '{\n' + resultLines.join(',\n') + '\n}';
+        }
+        return JSON.stringify(data, null, 4);
+    }
+    function convert() {
+        const rawInput = $('#rawDataInput').val();
+        const outputElement = $('#jsonOutput');
+        const type = $('#conversionType').val();
+        const trimmedInput = rawInput.trim();
+        lastConvertedData = null;
+        if (!trimmedInput) { outputElement.text(''); return; }
+        try {
+            let parsedData;
+            if (type === 'auto') {
+                if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) parsedData = parseXmlString(trimmedInput);
+                else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) parsedData = parseJsonString(trimmedInput);
+                else parsedData = parsePipeString(trimmedInput);
+            } else if (type === 'json-format') parsedData = parseJsonString(trimmedInput);
+            else if (type === 'pipe') parsedData = parsePipeString(trimmedInput);
+            else if (type === 'xml') parsedData = parseXmlString(trimmedInput);
+            lastConvertedData = parsedData;
+            outputElement.text(formatDataForDisplay(parsedData));
+        } catch (error) {
+            outputElement.text(`เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`);
+        }
+    }
+
+    // --- Google Drive Upload Logic (No changes) ---
+    async function exportAndUploadToDrive() {
+        if (!gapi.client.getToken()) {
+            Swal.fire('ข้อผิดพลาด', 'กรุณาลงชื่อเข้าใช้ Google ก่อน', 'error');
+            return;
+        }
+        if (!lastConvertedData) {
+            Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการอัปโหลด', 'warning');
+            return;
+        }
+        Swal.fire({ title: 'กำลังเตรียมไฟล์ Excel...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        let dataForSheet, headerOrder = [];
+        let dataToProcess = JSON.parse(JSON.stringify(lastConvertedData));
+        if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
+            dataToProcess = dataToProcess.reduce((obj, item) => { obj[item.Key] = item.Value; return obj; }, {});
+        }
+        const keys = Object.keys(dataToProcess);
+        if (keys.length === 1 && typeof dataToProcess[keys[0]] === 'object' && dataToProcess[keys[0]] !== null) {
+            dataToProcess = dataToProcess[keys[0]];
+        }
+        if (dataToProcess && dataToProcess.parameter && Array.isArray(dataToProcess.parameter.par)) {
+            dataToProcess.parameter.par.forEach(p => { if (p && p.name) { dataToProcess[p.name] = p.value || ''; } });
+            delete dataToProcess.parameter;
+        }
+        if (Array.isArray(dataToProcess)) {
+            dataForSheet = dataToProcess;
+            if (dataForSheet.length > 0) {
+                const mostCompleteObject = dataForSheet.reduce((a, b) => (Object.keys(a || {}).length > Object.keys(b || {}).length ? a : b), {});
+                headerOrder = Object.keys(mostCompleteObject || {});
             }
-
-            function parseXmlString(xmlString) {
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlString, "application/xml");
-
-                if (xmlDoc.getElementsByTagName("parsererror").length) {
-                    throw new Error("Invalid XML format");
-                }
-
-                function xmlNodeToJson(node) {
-                    // Base case: if it's a text node with content, return the text
-                    if (node.nodeType === 3 && node.nodeValue.trim()) {
-                        return node.nodeValue.trim();
-                    }
-
-                    if (node.nodeType !== 1) { // Only process element nodes
-                        return null;
-                    }
-                    
-                    // Handle element nodes
-                    const obj = {};
-                    const children = Array.from(node.children);
-
-                    if (children.length > 0) {
-                        children.forEach(child => {
-                            const childName = child.tagName;
-                            let childJson;
-                            
-                            // Special rule for <par> tags as requested
-                            if (child.tagName === 'par' && child.hasAttribute('name')) {
-                                childJson = {
-                                    name: child.getAttribute('name'),
-                                    value: child.textContent.trim()
-                                };
-                            } else {
-                                childJson = xmlNodeToJson(child);
-                            }
-
-                            if (!obj[childName]) {
-                                obj[childName] = childJson;
-                            } else {
-                                if (!Array.isArray(obj[childName])) {
-                                    obj[childName] = [obj[childName]];
-                                }
-                                obj[childName].push(childJson);
-                            }
-                        });
-                    } else if (node.textContent.trim()) {
-                        // If no element children but has text, this becomes the value.
-                        return node.textContent.trim();
-                    }
-                    
-                    return obj;
-                }
-
-                const rootElement = xmlDoc.documentElement;
-                const result = {};
-                result[rootElement.tagName] = xmlNodeToJson(rootElement);
-                return result;
-            }
-
-
-             // --- Data Formatting Function ---
-
-            function formatDataForDisplay(data) {
-                if (Array.isArray(data) && data.every(item => 'Key' in item && 'Value' in item)) {
-                    const resultLines = data.map(item => {
-                        const formattedValue = JSON.stringify(item.Value);
-                        return `    "${item.Key}": ${formattedValue}`;
-                    });
-                    return '{\n' + resultLines.join(',\n') + '\n}';
-                }
-                return JSON.stringify(data, null, 4);
-            }
-            
-            // --- Main Conversion Controller ---
-            
-            function convert() {
-                const rawInput = $('#rawDataInput').val();
-                const outputElement = $('#jsonOutput');
-                const type = $('#conversionType').val();
-                const trimmedInput = rawInput.trim();
-
-                lastConvertedData = null; 
-                if (!trimmedInput) {
-                    outputElement.text('');
-                    return;
-                }
-
-                try {
-                    let parsedData;
-                    switch (type) {
-                        case 'auto':
-                            if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) {
-                                try { parsedData = parseXmlString(trimmedInput); } catch (e) { throw e; }
-                            } else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
-                                try { parsedData = parseJsonString(trimmedInput); } catch (e) { throw e; }
-                            } else {
-                                try { parsedData = parsePipeString(trimmedInput); } catch (e) { throw e; }
-                            }
-                            break;
-                        case 'json-format':
-                             parsedData = parseJsonString(trimmedInput);
-                            break;
-                        case 'pipe':
-                            parsedData = parsePipeString(trimmedInput);
-                            break;
-                        case 'xml':
-                            parsedData = parseXmlString(trimmedInput);
-                            break;
-                    }
-                    lastConvertedData = parsedData; 
-                    const displayText = formatDataForDisplay(parsedData);
-                    outputElement.text(displayText);
-                } catch (error) {
-                    outputElement.text(`เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`);
-                }
-            }
-
-            // --- Export Function ---
-            
-            function exportToExcel() {
-                if (!lastConvertedData) {
-                    alert('ไม่มีข้อมูลสำหรับส่งออก กรุณาแปลงข้อมูลก่อน');
-                    return;
-                }
-                
-                let dataForSheet;
-                let headerOrder = [];
-
-                let dataToProcess = JSON.parse(JSON.stringify(lastConvertedData)); // Deep copy to avoid modifying the original
-                
-                // Unify data structures for consistent export
-                if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
-                    const singleObject = dataToProcess.reduce((obj, item) => {
-                        obj[item.Key] = item.Value;
-                        return obj;
-                    }, {});
-                    dataToProcess = singleObject;
-                }
-                
-                // Unwrap single-key root objects (like from XML conversion)
-                const keys = Object.keys(dataToProcess);
-                if (keys.length === 1 && typeof dataToProcess[keys[0]] === 'object' && dataToProcess[keys[0]] !== null) {
-                    dataToProcess = dataToProcess[keys[0]];
-                }
-
-                // Check for and flatten the special 'parameter' structure from XML
-                if (dataToProcess && dataToProcess.parameter && Array.isArray(dataToProcess.parameter.par)) {
-                    dataToProcess.parameter.par.forEach(p => {
-                        if (p && p.name) {
-                            dataToProcess[p.name] = p.value || '';
-                        }
-                    });
-                    delete dataToProcess.parameter;
-                }
-
-                // Now, determine the header order from the processed data (dataToProcess).
-                if (Array.isArray(dataToProcess)) {
-                    dataForSheet = dataToProcess;
-                    if (dataForSheet.length > 0) {
-                        const mostCompleteObject = dataForSheet.reduce((a, b) => {
-                            if (typeof a !== 'object' || a === null) return b;
-                            if (typeof b !== 'object' || b === null) return a;
-                            return Object.keys(a).length > Object.keys(b).length ? a : b;
-                        }, {});
-
-                        if (typeof mostCompleteObject === 'object' && mostCompleteObject !== null) {
-                            headerOrder = Object.keys(mostCompleteObject);
-                        }
-                    }
-                } else if (typeof dataToProcess === 'object' && dataToProcess !== null) {
-                    headerOrder = Object.keys(dataToProcess);
-                    dataForSheet = [dataToProcess];
-                } else {
-                     dataForSheet = [{ Value: dataToProcess }];
-                     headerOrder = ['Value'];
-                }
-
-                if (!dataForSheet || dataForSheet.length === 0) {
-                    alert('ไม่มีข้อมูลที่สามารถส่งออกได้');
-                    return;
-                }
-
-                try {
-                    const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
-                    const workbook = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-                    XLSX.writeFile(workbook, "ExportedData.xlsx");
-                } catch (error) {
-                    alert(`เกิดข้อผิดพลาดในการส่งออก: ${error.message}`);
-                }
-            }
-
-
-            // --- Event Listeners ---
-            $('#rawDataInput').on('input', convert);
-            $('#conversionType').on('change', convert);
-            $('#exportBtn').on('click', exportToExcel);
-
-            $('#clearBtn').on('click', function() {
-                $('#rawDataInput').val('');
-                $('#jsonOutput').text('');
-                lastConvertedData = null;
-            });
-
-            $('#copyBtn').on('click', function() {
-                const jsonText = $('#jsonOutput').text();
-                if (jsonText && !jsonText.startsWith('เกิดข้อผิดพลาด')) {
-                    navigator.clipboard.writeText(jsonText).then(() => {
-                        const originalText = $(this).text();
-                        $(this).text('คัดลอกแล้ว!');
-                        setTimeout(() => {
-                            $(this).text(originalText);
-                        }, 2000);
-                    }).catch(err => {
-                        console.error('Could not copy text: ', err);
-                        const textArea = document.createElement("textarea");
-                        textArea.value = jsonText;
-                        document.body.appendChild(textArea);
-                        textArea.select();
-                        try {
-                            document.execCommand('copy');
-                        } finally {
-                            document.body.removeChild(textArea);
-                        }
-                    });
-                }
-            });
-
-            // Initial conversion on load
-            convert();
+        } else if (typeof dataToProcess === 'object' && dataToProcess !== null) {
+            headerOrder = Object.keys(dataToProcess);
+            dataForSheet = [dataToProcess];
+        } else {
+            dataForSheet = [{ Value: dataToProcess }];
+            headerOrder = ['Value'];
+        }
+        if (!dataForSheet || dataForSheet.length === 0) { Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่สามารถส่งออกได้', 'warning'); return; }
+        try {
+            const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+            const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            Swal.update({ title: 'กำลังค้นหาโฟลเดอร์ใน Google Drive...' });
+            const folderId = await getOrCreateFolderId();
+            Swal.update({ title: 'กำลังอัปโหลดไฟล์...', text: 'กรุณาอย่าปิดหน้าต่างนี้' });
+            const fileName = `ExportedData_${new Date().getTime()}.xlsx`;
+            await uploadFileToDrive(folderId, blob, fileName);
+            Swal.fire('สำเร็จ!', `ไฟล์ "${fileName}" ถูกอัปโหลดไปยังโฟลเดอร์ "${FOLDER_NAME}" ใน Google Drive ของคุณแล้ว`, 'success');
+        } catch (error) {
+            console.error('Upload Error:', error);
+            Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถอัปโหลดไฟล์ได้: ${error.message || JSON.stringify(error)}`, 'error');
+        }
+    }
+    async function getOrCreateFolderId() {
+        const response = await gapi.client.drive.files.list({
+            q: `mimeType='application/vnd.google-apps.folder' and name='${FOLDER_NAME}' and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive'
         });
-    </script>
+        if (response.result.files.length > 0) return response.result.files[0].id;
+        const fileMetadata = { 'name': FOLDER_NAME, 'mimeType': 'application/vnd.google-apps.folder' };
+        const createResponse = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+        return createResponse.result.id;
+    }
+    function uploadFileToDrive(folderId, blob, fileName) {
+        return new Promise((resolve, reject) => {
+            const metadata = { name: fileName, parents: [folderId], mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', blob);
+            const accessToken = gapi.client.getToken().access_token;
+            fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+                body: form,
+            }).then(res => res.ok ? res.json() : res.json().then(err => reject(err)))
+              .then(val => resolve(val))
+              .catch(err => reject(err));
+        });
+    }
 
+    // --- Helper Functions (No changes) ---
+    function clearAll() {
+        $('#rawDataInput').val('');
+        $('#jsonOutput').text('');
+        lastConvertedData = null;
+    }
+    function copyJson() {
+        const jsonText = $('#jsonOutput').text();
+        if (jsonText && !jsonText.startsWith('เกิดข้อผิดพลาด')) {
+            navigator.clipboard.writeText(jsonText).then(() => {
+                const originalText = $('#copyBtn').text();
+                $('#copyBtn').text('คัดลอกแล้ว!');
+                setTimeout(() => { $('#copyBtn').text(originalText); }, 2000);
+            }).catch(err => console.error('Could not copy text: ', err));
+        }
+    }
+    </script>
 </body>
 </html>
