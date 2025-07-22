@@ -1,26 +1,39 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="dark"> <!-- Start in dark mode by default -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ตัวแปลงข้อมูลอัจฉริยะ (JSON, SQL) พร้อม Export</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Explicitly configure Tailwind for class-based dark mode -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <!-- jQuery -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <!-- SheetJS (XLSX) for Excel Export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <!-- SweetAlert2 for notifications -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- **NEW** highlight.js for syntax highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <!-- highlight.js for syntax highlighting -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <!-- **NEW** SQL Formatter -->
+    
+    <!-- A11y Themes (for JSON/XML) -->
+    <link id="a11y-light-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/a11y-light.min.css" disabled>
+    <link id="a11y-dark-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/a11y-dark.min.css" disabled>
+    <!-- GitHub Themes (for SQL) -->
+    <link id="github-light-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" disabled>
+    <link id="github-dark-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" disabled>
+    
+    <!-- SQL Formatter -->
     <script src="https://cdn.jsdelivr.net/npm/sql-formatter@15.3.1/dist/sql-formatter.min.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Google API Scripts -->
     <script src="https://apis.google.com/js/api.js?onload=gapiLoaded" async defer></script>
@@ -28,52 +41,51 @@
 
     <style>
         body {
-            font-family: 'Sarabun', 'Inter', sans-serif;
+            font-family: 'Sarabun', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
         }
-        /* Custom scrollbar for webkit browsers */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1f2937; /* gray-800 */
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563; /* gray-600 */
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280; /* gray-500 */
-        }
-        /* Style for highlighted code */
-        #jsonOutput {
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        .dark ::-webkit-scrollbar-track { background: #2b2b2b; }
+        .dark ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #555555; }
+        html:not(.dark) ::-webkit-scrollbar-track { background: #f1f5f9; }
+        html:not(.dark) ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Syntax Highlighting style override */
+        #jsonOutput { white-space: pre-wrap; word-break: break-all; }
         .hljs {
-            background: #1f2937 !important; /* Match textarea background */
-            color: #d1d5db; /* gray-300 */
+            transition: background-color 0.3s;
+            background: transparent !important; /* Let parent div control background */
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200 flex flex-col min-h-screen items-center p-4 sm:p-6 md:p-8">
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col min-h-screen items-center p-4 sm:p-6 md:p-8">
+
+    <!-- Theme Toggle Button -->
+    <div class="absolute top-4 right-4">
+        <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
+            <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+            <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 5.05A1 1 0 016.465 3.636l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM5 11a1 1 0 100-2H3a1 1 0 100 2h2zM8 15a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1zm4.95-11.364a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+        </button>
+    </div>
 
     <div class="w-full max-w-7xl mx-auto flex flex-col flex-grow">
         <!-- Header -->
         <header class="text-center mb-4">
-            <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูลอัจฉริยะ</h1>
-            <p class="text-gray-400 mt-2">วางข้อมูล > แปลง > Export หรืออัปโหลดไป Google Drive</p>
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">ตัวแปลงข้อมูลอัจฉริยะ</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">วางข้อมูล > แปลง > Export หรืออัปโหลดไป Google Drive</p>
         </header>
 
         <!-- Controls Container -->
         <div class="w-full max-w-4xl mx-auto mb-6">
             <!-- Conversion Type Selector -->
             <div class="mb-4">
-                <label for="conversionType" class="block text-center text-lg font-semibold mb-2 text-gray-300">ประเภทการแปลง</label>
-                <select id="conversionType" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <label for="conversionType" class="block text-center text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">ประเภทการแปลง</label>
+                <select id="conversionType" class="w-full p-2 bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     <option value="auto">ตรวจจับอัตโนมัติ (Auto-Detect)</option>
                     <option value="json-format">จัดรูปแบบ JSON (Format JSON)</option>
-                    <!-- **NEW** SQL Formatter Option -->
                     <option value="sql-format">จัดรูปแบบ SQL (SQL Formatter)</option>
                     <option value="pipe">ข้อความคั่นด้วย | (Pipe-Separated)</option>
                     <option value="xml">XML to JSON</option>
@@ -82,7 +94,6 @@
             <!-- Action Buttons -->
             <div class="flex justify-center items-center flex-wrap gap-3 sm:gap-4">
                 <button id="copyBtn" class="px-5 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">คัดลอก</button>
-                <!-- **NEW** Local Export Button -->
                 <button id="exportLocalBtn" class="px-5 py-2 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700">Export as File</button>
                 <button id="uploadBtn" class="px-5 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 opacity-50 cursor-not-allowed" disabled>Upload to Drive</button>
                 <button id="clearBtn" class="px-5 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700">ล้างข้อมูล</button>
@@ -92,24 +103,23 @@
                  <button id="authorize_button" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">ลงชื่อเข้าใช้ Google</button>
                 <button id="signout_button" style="display: none;" class="px-6 py-2 bg-yellow-600 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-700">ออกจากระบบ Google</button>
             </div>
-             <div id="auth-status" class="text-center mt-3 text-sm text-gray-400">กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์</div>
+             <div id="auth-status" class="text-center mt-3 text-sm text-gray-500 dark:text-gray-400">กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์</div>
         </div>
 
         <!-- Main Content: Input and Output -->
         <main class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             <!-- Input Column -->
             <div class="flex flex-col">
-                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลนำเข้า (Input)</label>
+                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">ข้อมูลนำเข้า (Input)</label>
                 <textarea id="rawDataInput"
-                          class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm"
+                          class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm text-gray-800 dark:text-gray-200"
                           placeholder="วางข้อมูลที่คั่นด้วย |, JSON, XML หรือ SQL ที่นี่..."></textarea>
             </div>
 
             <!-- Output Column -->
             <div class="flex flex-col">
-                <label for="jsonOutput" class="text-lg font-semibold mb-2 text-gray-300">ผลลัพธ์ (Output)</label>
-                <!-- **MODIFIED** Output area for syntax highlighting -->
-                <div class="relative w-full h-full min-h-[300px] md:min-h-[500px] bg-gray-800 border border-gray-700 rounded-lg shadow-inner overflow-hidden">
+                <label for="jsonOutput" class="text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">ผลลัพธ์ (Output)</label>
+                <div class="relative w-full h-full min-h-[300px] md:min-h-[500px] bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-inner overflow-hidden">
                     <pre class="w-full h-full overflow-auto p-4"><code id="jsonOutput" class="font-mono text-sm"></code></pre>
                 </div>
             </div>
@@ -126,63 +136,94 @@
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;
-    let lastConvertedData = null; // Stores parsed object
-    let lastFormattedString = ''; // Stores formatted string for copying
+    let lastConvertedData = null;
+    let lastFormattedString = '';
 
     // --- UI Elements ---
     const authorizeButton = $('#authorize_button');
     const signoutButton = $('#signout_button');
     const uploadButton = $('#uploadBtn');
     const authStatusDiv = $('#auth-status');
+    const themeToggleBtn = $('#theme-toggle');
+    const themeToggleDarkIcon = $('#theme-toggle-dark-icon');
+    const themeToggleLightIcon = $('#theme-toggle-light-icon');
+    
+    // Theme stylesheet elements
+    const a11yLightTheme = $('#a11y-light-theme');
+    const a11yDarkTheme = $('#a11y-dark-theme');
+    const githubLightTheme = $('#github-light-theme');
+    const githubDarkTheme = $('#github-dark-theme');
 
-    // --- Google onload callbacks ---
-    function gapiLoaded() {
-        gapi.load('client', () => {
-            gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-            }).then(() => { gapiInited = true; console.log("GAPI initialized."); })
-              .catch(err => Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error'));
-        });
+
+    // --- Theme Switching Logic ---
+    function updateHighlightTheme(language) {
+        // Disable all themes first
+        a11yLightTheme.prop('disabled', true);
+        a11yDarkTheme.prop('disabled', true);
+        githubLightTheme.prop('disabled', true);
+        githubDarkTheme.prop('disabled', true);
+
+        const isDarkMode = document.documentElement.classList.contains('dark');
+
+        if (language === 'sql') {
+            // Use GitHub theme for SQL
+            if (isDarkMode) {
+                githubDarkTheme.prop('disabled', false);
+            } else {
+                githubLightTheme.prop('disabled', false);
+            }
+        } else {
+            // Use A11y theme for everything else (JSON, XML)
+            if (isDarkMode) {
+                a11yDarkTheme.prop('disabled', false);
+            } else {
+                a11yLightTheme.prop('disabled', false);
+            }
+        }
     }
 
-    function onGoogleLibraryLoad() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: (tokenResponse) => {
-                if (tokenResponse.error) {
-                    const errorDetails = tokenResponse.error_description || tokenResponse.error;
-                    Swal.fire('เกิดข้อผิดพลาดในการยืนยันตัวตน', `Google แจ้งว่า: ${errorDetails}`, 'error');
-                    updateSigninStatus(false);
-                    return;
-                }
-                if (tokenResponse.access_token) {
-                    gapi.client.setToken(tokenResponse);
-                    updateSigninStatus(true);
-                } else {
-                    Swal.fire('เกิดข้อผิดพลาด', 'ไม่ได้รับ Access Token จาก Google', 'error');
-                    updateSigninStatus(false);
-                }
-            },
-        });
-        gisInited = true;
-        console.log("GIS initialized.");
+    function setAppTheme(theme, fromUserAction = false) {
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+            themeToggleLightIcon.addClass('hidden');
+            themeToggleDarkIcon.removeClass('hidden');
+            if (fromUserAction) localStorage.setItem('color-theme', 'dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+            themeToggleDarkIcon.addClass('hidden');
+            themeToggleLightIcon.removeClass('hidden');
+            if (fromUserAction) localStorage.setItem('color-theme', 'light');
+        }
+        // Re-apply the correct highlight theme after changing app theme
+        convert();
     }
 
     // --- Main Logic ---
     $(document).ready(function() {
-        // Event Listeners
+        // --- Theme Initializer ---
+        const savedTheme = localStorage.getItem('color-theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme) {
+            setAppTheme(savedTheme);
+        } else {
+            setAppTheme(systemPrefersDark ? 'dark' : 'light');
+        }
+
+        // --- Event Listeners ---
+        themeToggleBtn.on('click', () => {
+            const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            setAppTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+        });
+
         authorizeButton.on('click', handleAuthClick);
         signoutButton.on('click', handleSignoutClick);
         $('#rawDataInput').on('input', convert);
         $('#conversionType').on('change', convert);
         $('#uploadBtn').on('click', exportAndUploadToDrive);
-        $('#exportLocalBtn').on('click', exportLocal); // **NEW**
+        $('#exportLocalBtn').on('click', exportLocal);
         $('#clearBtn').on('click', clearAll);
         $('#copyBtn').on('click', copyOutput);
 
-        convert(); // Initial conversion
     });
 
     // --- Authentication ---
@@ -191,19 +232,46 @@
             authorizeButton.hide();
             signoutButton.show();
             uploadButton.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
-            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว').addClass('text-green-400').removeClass('text-gray-400');
+            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว').addClass('text-green-500 dark:text-green-400').removeClass('text-gray-500 dark:text-gray-400');
         } else {
             authorizeButton.show();
             signoutButton.hide();
             uploadButton.prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
-            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์').removeClass('text-green-400').addClass('text-gray-400');
+            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์').removeClass('text-green-500 dark:text-green-400').addClass('text-gray-500 dark:text-gray-400');
         }
+    }
+
+    // --- Google API Functions ---
+    function gapiLoaded() {
+        gapi.load('client', () => {
+            gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] })
+              .then(() => { gapiInited = true; console.log("GAPI initialized."); })
+              .catch(err => Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error'));
+        });
+    }
+
+    function onGoogleLibraryLoad() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID, scope: SCOPES,
+            callback: (tokenResponse) => {
+                if (tokenResponse.error) {
+                    Swal.fire('เกิดข้อผิดพลาดในการยืนยันตัวตน', `Google แจ้งว่า: ${tokenResponse.error_description || tokenResponse.error}`, 'error');
+                    updateSigninStatus(false);
+                } else if (tokenResponse.access_token) {
+                    gapi.client.setToken(tokenResponse);
+                    updateSigninStatus(true);
+                } else {
+                    Swal.fire('เกิดข้อผิดพลาด', 'ไม่ได้รับ Access Token จาก Google', 'error');
+                    updateSigninStatus(false);
+                }
+            },
+        });
+        gisInited = true; console.log("GIS initialized.");
     }
 
     function handleAuthClick() {
         if (!gisInited || !gapiInited) {
-            Swal.fire('กรุณารอสักครู่', 'ไลบรารีกำลังโหลด...', 'info');
-            return;
+            Swal.fire('กรุณารอสักครู่', 'ไลบรารีกำลังโหลด...', 'info'); return;
         }
         tokenClient.requestAccessToken({ prompt: 'consent' });
     }
@@ -279,40 +347,46 @@
 
         if (!trimmedInput) {
             outputElement.empty();
+            updateHighlightTheme('json'); // Reset to default theme
             return;
         }
 
         try {
             let parsedData;
             let formattedString;
-            let language = 'json'; // Default language for highlighting
+            let language = 'json';
 
             if (type === 'auto') {
                 if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) {
                     parsedData = parseXmlString(trimmedInput);
+                    language = 'json'; 
                 } else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
                     parsedData = parseJsonString(trimmedInput);
+                    language = 'json';
                 } else {
-                    // Check if it looks like SQL
-                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER'];
+                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET'];
                     if (sqlKeywords.some(keyword => trimmedInput.toUpperCase().startsWith(keyword))) {
-                        formattedString = sqlFormatter.format(trimmedInput);
+                        formattedString = sqlFormatter.format(trimmedInput, { language: 'tsql' });
                         language = 'sql';
+                        lastConvertedData = { sql_query: formattedString };
                     } else {
                          parsedData = parsePipeString(trimmedInput);
+                         language = 'json';
                     }
                 }
             } else if (type === 'json-format') {
                 parsedData = parseJsonString(trimmedInput);
-            } else if (type === 'sql-format') { // **NEW** SQL Formatting
-                formattedString = sqlFormatter.format(trimmedInput);
+                language = 'json';
+            } else if (type === 'sql-format') {
+                formattedString = sqlFormatter.format(trimmedInput, { language: 'tsql' });
                 language = 'sql';
-                // For SQL, the 'parsed data' is just the formatted string
                 lastConvertedData = { sql_query: formattedString };
             } else if (type === 'pipe') {
                 parsedData = parsePipeString(trimmedInput);
+                language = 'json';
             } else if (type === 'xml') {
                 parsedData = parseXmlString(trimmedInput);
+                language = 'json';
             }
 
             if (parsedData) {
@@ -320,54 +394,67 @@
                 formattedString = JSON.stringify(parsedData, null, 4);
             }
             
-            lastFormattedString = formattedString;
-
-            // Apply syntax highlighting
-            const highlighted = hljs.highlight(formattedString, { language: language, ignoreIllegals: true }).value;
-            outputElement.html(highlighted);
+            if (typeof formattedString !== 'undefined') {
+                lastFormattedString = formattedString;
+                updateHighlightTheme(language);
+                const highlighted = hljs.highlight(formattedString, { language: language, ignoreIllegals: true }).value;
+                outputElement.html(highlighted);
+            }
 
         } catch (error) {
             lastConvertedData = null;
             lastFormattedString = '';
             const errorMessage = `เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`;
-            outputElement.html(`<span class="text-red-400">${errorMessage}</span>`);
+            outputElement.html(`<span class="text-red-500 dark:text-red-400">${errorMessage}</span>`);
         }
     }
 
     // --- Data Export & Upload ---
-
-    // **NEW** Local Export Function
+    // **MODIFIED** exportLocal to handle SQL separately
     async function exportLocal() {
-        if (!lastConvertedData) {
+        if (!lastFormattedString) {
             Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการ Export', 'warning');
             return;
         }
 
-        const { value: fileType } = await Swal.fire({
-            title: 'เลือกรูปแบบไฟล์',
-            input: 'radio',
-            inputOptions: {
-                json: 'JSON',
-                xlsx: 'Excel (XLSX)'
-            },
-            inputValidator: (value) => {
-                if (!value) {
-                    return 'คุณต้องเลือกรูปแบบไฟล์!'
-                }
-            }
-        });
+        const conversionType = $('#conversionType').val();
+        const isSqlFormat = conversionType === 'sql-format' || (conversionType === 'auto' && lastConvertedData?.sql_query);
 
-        if (fileType) {
-            if (fileType === 'json') {
-                downloadBlob(new Blob([lastFormattedString], { type: 'application/json;charset=utf-8' }), `data_${new Date().getTime()}.json`);
-            } else if (fileType === 'xlsx') {
-                try {
-                    const blob = createExcelBlob();
-                    if (blob) {
-                        downloadBlob(blob, `ExportedData_${new Date().getTime()}.xlsx`);
+        if (isSqlFormat) {
+            // Directly download as .sql file
+            downloadBlob(new Blob([lastFormattedString], { type: 'text/sql;charset=utf-8' }), `query_${new Date().getTime()}.sql`);
+        } else {
+            // Show options for other types
+            const { value: fileType } = await Swal.fire({
+                title: 'เลือกรูปแบบไฟล์',
+                input: 'radio',
+                inputOptions: {
+                    json: 'JSON',
+                    xlsx: 'Excel (XLSX)'
+                },
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'คุณต้องเลือกรูปแบบไฟล์!'
                     }
-                } catch (error) {
-                     Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถสร้างไฟล์ Excel ได้: ${error.message}`, 'error');
+                }
+            });
+
+            if (fileType) {
+                if (fileType === 'json') {
+                    downloadBlob(new Blob([lastFormattedString], { type: 'application/json;charset=utf-8' }), `data_${new Date().getTime()}.json`);
+                } else if (fileType === 'xlsx') {
+                    if (!lastConvertedData) {
+                         Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่แปลงแล้วสำหรับสร้างไฟล์ Excel', 'warning');
+                         return;
+                    }
+                    try {
+                        const blob = createExcelBlob();
+                        if (blob) {
+                            downloadBlob(blob, `ExportedData_${new Date().getTime()}.xlsx`);
+                        }
+                    } catch (error) {
+                         Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถสร้างไฟล์ Excel ได้: ${error.message}`, 'error');
+                    }
                 }
             }
         }
@@ -390,12 +477,8 @@
             Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลสำหรับสร้างไฟล์ Excel', 'warning');
             return null;
         }
-
         let dataForSheet, headerOrder = [];
-        // Deep copy to avoid modifying original data
         let dataToProcess = JSON.parse(JSON.stringify(lastConvertedData));
-
-        // Handle specific structures (pipe, xml etc.) to flatten them for Excel
         if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
             dataToProcess = dataToProcess.reduce((obj, item) => { obj[item.Key] = item.Value; return obj; }, {});
         }
@@ -403,17 +486,14 @@
         if (keys.length === 1 && typeof dataToProcess[keys[0]] === 'object' && dataToProcess[keys[0]] !== null) {
             dataToProcess = dataToProcess[keys[0]];
         }
-        if (dataToProcess && dataToProcess.parameter && Array.isArray(dataToProcess.parameter.par)) {
-            dataToProcess.parameter.par.forEach(p => { if (p && p.name) { dataToProcess[p.name] = p.value || ''; } });
+        if (dataToProcess?.parameter?.par) {
+            dataToProcess.parameter.par.forEach(p => { if (p?.name) { dataToProcess[p.name] = p.value || ''; } });
             delete dataToProcess.parameter;
         }
-        
-        // Final check for array or object
         if (Array.isArray(dataToProcess)) {
             dataForSheet = dataToProcess;
             if (dataForSheet.length > 0) {
-                const mostCompleteObject = dataForSheet.reduce((a, b) => (Object.keys(a || {}).length > Object.keys(b || {}).length ? a : b), {});
-                headerOrder = Object.keys(mostCompleteObject || {});
+                headerOrder = Object.keys(dataForSheet.reduce((a, b) => (Object.keys(a || {}).length > Object.keys(b || {}).length ? a : b), {}));
             }
         } else if (typeof dataToProcess === 'object' && dataToProcess !== null) {
             headerOrder = Object.keys(dataToProcess);
@@ -422,12 +502,10 @@
             dataForSheet = [{ Value: dataToProcess }];
             headerOrder = ['Value'];
         }
-
         if (!dataForSheet || dataForSheet.length === 0) {
             Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่สามารถส่งออกเป็น Excel ได้', 'warning');
             return null;
         }
-
         const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
@@ -435,21 +513,45 @@
         return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     }
 
+    // **MODIFIED** exportAndUploadToDrive to handle SQL separately
     async function exportAndUploadToDrive() {
         if (!gapi.client.getToken()) {
             Swal.fire('ข้อผิดพลาด', 'กรุณาลงชื่อเข้าใช้ Google ก่อน', 'error');
             return;
         }
-        Swal.fire({ title: 'กำลังเตรียมไฟล์ Excel...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-        
+        if (!lastFormattedString) {
+            Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการอัปโหลด', 'warning');
+            return;
+        }
+
+        const conversionType = $('#conversionType').val();
+        const isSqlFormat = conversionType === 'sql-format' || (conversionType === 'auto' && lastConvertedData?.sql_query);
+
+        Swal.fire({
+            title: 'กำลังเตรียมไฟล์...',
+            text: 'กรุณารอสักครู่',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
         try {
-            const blob = createExcelBlob();
-            if (!blob) return; // Error handled in createExcelBlob
+            let blob;
+            let fileName;
+
+            if (isSqlFormat) {
+                blob = new Blob([lastFormattedString], { type: 'text/sql;charset=utf-8' });
+                fileName = `query_${new Date().getTime()}.sql`;
+            } else {
+                // Default to Excel for other types
+                blob = createExcelBlob();
+                if (!blob) return; // Error is handled inside createExcelBlob
+                fileName = `ExportedData_${new Date().getTime()}.xlsx`;
+            }
 
             Swal.update({ title: 'กำลังค้นหาโฟลเดอร์ใน Google Drive...' });
             const folderId = await getOrCreateFolderId();
             Swal.update({ title: 'กำลังอัปโหลดไฟล์...', text: 'กรุณาอย่าปิดหน้าต่างนี้' });
-            const fileName = `ExportedData_${new Date().getTime()}.xlsx`;
+            
             await uploadFileToDrive(folderId, blob, fileName);
             Swal.fire('สำเร็จ!', `ไฟล์ "${fileName}" ถูกอัปโหลดไปยังโฟลเดอร์ "${FOLDER_NAME}" ใน Google Drive ของคุณแล้ว`, 'success');
         } catch (error) {
@@ -458,15 +560,14 @@
         }
     }
 
+
     async function getOrCreateFolderId() {
         const response = await gapi.client.drive.files.list({
             q: `mimeType='application/vnd.google-apps.folder' and name='${FOLDER_NAME}' and trashed=false`,
-            fields: 'files(id, name)',
-            spaces: 'drive'
+            fields: 'files(id, name)', spaces: 'drive'
         });
         if (response.result.files.length > 0) return response.result.files[0].id;
-        const fileMetadata = { 'name': FOLDER_NAME, 'mimeType': 'application/vnd.google-apps.folder' };
-        const createResponse = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
+        const createResponse = await gapi.client.drive.files.create({ resource: { 'name': FOLDER_NAME, 'mimeType': 'application/vnd.google-apps.folder' }, fields: 'id' });
         return createResponse.result.id;
     }
 
@@ -482,8 +583,7 @@
                 headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
                 body: form,
             }).then(res => res.ok ? res.json() : res.json().then(err => reject(err)))
-              .then(val => resolve(val))
-              .catch(err => reject(err));
+              .then(val => resolve(val)).catch(err => reject(err));
         });
     }
 
@@ -501,7 +601,7 @@
                 const originalText = $('#copyBtn').text();
                 $('#copyBtn').text('คัดลอกแล้ว!');
                 setTimeout(() => { $('#copyBtn').text(originalText); }, 2000);
-            }).catch(err => console.error('Could not copy text: ', err));
+            }).catch(err => Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถคัดลอกได้', 'error'));
         }
     }
     </script>
