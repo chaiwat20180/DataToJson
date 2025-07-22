@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ตัวแปลงข้อมูลเป็น JSON พร้อมอัปโหลดไปยัง Google Drive</title>
+    <title>ตัวแปลงข้อมูลอัจฉริยะ (JSON, SQL) พร้อม Export</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- jQuery -->
@@ -12,16 +12,20 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <!-- SweetAlert2 for notifications -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- **NEW** highlight.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- **NEW** SQL Formatter -->
+    <script src="https://cdn.jsdelivr.net/npm/sql-formatter@15.3.1/dist/sql-formatter.min.js"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- **NEW** More reliable way to load Google API scripts -->
-    <!-- The onload attributes will call the global functions once the scripts are loaded -->
+
+    <!-- Google API Scripts -->
     <script src="https://apis.google.com/js/api.js?onload=gapiLoaded" async defer></script>
     <script src="https://accounts.google.com/gsi/client?onload=onGoogleLibraryLoad" async defer></script>
-    
+
     <style>
         body {
             font-family: 'Sarabun', 'Inter', sans-serif;
@@ -32,14 +36,23 @@
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #2d3748; /* gray-800 */
+            background: #1f2937; /* gray-800 */
         }
         ::-webkit-scrollbar-thumb {
-            background: #4a5568; /* gray-600 */
+            background: #4b5563; /* gray-600 */
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #718096; /* gray-500 */
+            background: #6b7280; /* gray-500 */
+        }
+        /* Style for highlighted code */
+        #jsonOutput {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .hljs {
+            background: #1f2937 !important; /* Match textarea background */
+            color: #d1d5db; /* gray-300 */
         }
     </style>
 </head>
@@ -48,30 +61,36 @@
     <div class="w-full max-w-7xl mx-auto flex flex-col flex-grow">
         <!-- Header -->
         <header class="text-center mb-4">
-            <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูล JSON และอัปโหลดไป Google Drive</h1>
-            <p class="text-gray-400 mt-2">วางข้อมูล > แปลงเป็น JSON > อัปโหลดไฟล์ Excel ไปยัง Google Drive</p>
+            <h1 class="text-3xl sm:text-4xl font-bold text-white">ตัวแปลงข้อมูลอัจฉริยะ</h1>
+            <p class="text-gray-400 mt-2">วางข้อมูล > แปลง > Export หรืออัปโหลดไป Google Drive</p>
         </header>
-        
+
         <!-- Controls Container -->
-        <div class="w-full max-w-2xl mx-auto mb-6">
+        <div class="w-full max-w-4xl mx-auto mb-6">
             <!-- Conversion Type Selector -->
             <div class="mb-4">
                 <label for="conversionType" class="block text-center text-lg font-semibold mb-2 text-gray-300">ประเภทการแปลง</label>
                 <select id="conversionType" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     <option value="auto">ตรวจจับอัตโนมัติ (Auto-Detect)</option>
                     <option value="json-format">จัดรูปแบบ JSON (Format JSON)</option>
+                    <!-- **NEW** SQL Formatter Option -->
+                    <option value="sql-format">จัดรูปแบบ SQL (SQL Formatter)</option>
                     <option value="pipe">ข้อความคั่นด้วย | (Pipe-Separated)</option>
                     <option value="xml">XML to JSON</option>
                 </select>
             </div>
             <!-- Action Buttons -->
-            <div class="flex justify-center items-center flex-wrap gap-4">
-                <button id="authorize_button" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">ลงชื่อเข้าใช้ Google</button>
+            <div class="flex justify-center items-center flex-wrap gap-3 sm:gap-4">
+                <button id="copyBtn" class="px-5 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">คัดลอก</button>
+                <!-- **NEW** Local Export Button -->
+                <button id="exportLocalBtn" class="px-5 py-2 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700">Export as File</button>
+                <button id="uploadBtn" class="px-5 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 opacity-50 cursor-not-allowed" disabled>Upload to Drive</button>
+                <button id="clearBtn" class="px-5 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700">ล้างข้อมูล</button>
+            </div>
+             <!-- Google Auth Buttons -->
+            <div class="flex justify-center items-center flex-wrap gap-4 mt-4">
+                 <button id="authorize_button" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">ลงชื่อเข้าใช้ Google</button>
                 <button id="signout_button" style="display: none;" class="px-6 py-2 bg-yellow-600 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-700">ออกจากระบบ Google</button>
-                
-                <button id="copyBtn" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">คัดลอก JSON</button>
-                <button id="uploadBtn" class="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 opacity-50 cursor-not-allowed" disabled>Export & Upload to Drive</button>
-                <button id="clearBtn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700">ล้างข้อมูล</button>
             </div>
              <div id="auth-status" class="text-center mt-3 text-sm text-gray-400">กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์</div>
         </div>
@@ -81,16 +100,17 @@
             <!-- Input Column -->
             <div class="flex flex-col">
                 <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-300">ข้อมูลนำเข้า (Input)</label>
-                <textarea id="rawDataInput" 
+                <textarea id="rawDataInput"
                           class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-mono text-sm"
-                          placeholder="วางข้อมูลที่คั่นด้วย |, JSON, หรือ XML ที่นี่..."></textarea>
+                          placeholder="วางข้อมูลที่คั่นด้วย |, JSON, XML หรือ SQL ที่นี่..."></textarea>
             </div>
 
             <!-- Output Column -->
             <div class="flex flex-col">
-                <label for="jsonOutput" class="text-lg font-semibold mb-2 text-gray-300">ผลลัพธ์ (JSON Output)</label>
-                <div class="relative w-full h-full min-h-[300px] md:min-h-[500px] bg-gray-800 border border-gray-700 rounded-lg shadow-inner">
-                    <pre class="w-full h-full overflow-auto p-4"><code id="jsonOutput" class="font-mono text-sm text-green-300 whitespace-pre-wrap break-all"></code></pre>
+                <label for="jsonOutput" class="text-lg font-semibold mb-2 text-gray-300">ผลลัพธ์ (Output)</label>
+                <!-- **MODIFIED** Output area for syntax highlighting -->
+                <div class="relative w-full h-full min-h-[300px] md:min-h-[500px] bg-gray-800 border border-gray-700 rounded-lg shadow-inner overflow-hidden">
+                    <pre class="w-full h-full overflow-auto p-4"><code id="jsonOutput" class="font-mono text-sm"></code></pre>
                 </div>
             </div>
         </main>
@@ -98,19 +118,16 @@
 
     <script>
     // --- Google Drive API Configuration ---
-    // สำคัญ: ใส่ Google API Key และ Client ID ของคุณที่นี่
-    // คำแนะนำ: เพื่อให้ทำงานได้ถูกต้อง คุณต้องเปิดไฟล์นี้ผ่าน Web Server (เช่น http://localhost:5500)
-    // ไม่ใช่เปิดโดยตรง (file://...). หากใช้ VS Code แนะนำให้ติดตั้ง Extension ชื่อ "Live Server"
     const API_KEY = 'AIzaSyCShTHlV2oFr7QMNetG81V_x99zeDXBUtU'; 
     const CLIENT_ID = '839014236860-pfb60nkl7klpej2bf67tsh5qhjnttei9.apps.googleusercontent.com';
-
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
     const FOLDER_NAME = 'ExportJson';
 
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;
-    let lastConvertedData = null;
+    let lastConvertedData = null; // Stores parsed object
+    let lastFormattedString = ''; // Stores formatted string for copying
 
     // --- UI Elements ---
     const authorizeButton = $('#authorize_button');
@@ -118,80 +135,68 @@
     const uploadButton = $('#uploadBtn');
     const authStatusDiv = $('#auth-status');
 
-    // --- Global onload callbacks for Google Scripts ---
-    // This function is called when the GAPI client library has loaded.
+    // --- Google onload callbacks ---
     function gapiLoaded() {
         gapi.load('client', () => {
             gapi.client.init({
                 apiKey: API_KEY,
                 discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-            }).then(() => {
-                gapiInited = true;
-                console.log("Google API Client (GAPI) initialized.");
-            }).catch(err => {
-                console.error("Error initializing GAPI client:", err);
-                Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error');
-            });
+            }).then(() => { gapiInited = true; console.log("GAPI initialized."); })
+              .catch(err => Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error'));
         });
     }
 
-    // This function is called when the GSI client library has loaded.
     function onGoogleLibraryLoad() {
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
-            callback: (tokenResponse) => { // Callback after user grants consent
-                console.log("Received token response:", tokenResponse); // Log the full response for debugging
-                
-                // **IMPROVED ERROR HANDLING**
-                if (tokenResponse.error !== undefined) {
-                    console.error("Google token error:", tokenResponse);
+            callback: (tokenResponse) => {
+                if (tokenResponse.error) {
                     const errorDetails = tokenResponse.error_description || tokenResponse.error;
                     Swal.fire('เกิดข้อผิดพลาดในการยืนยันตัวตน', `Google แจ้งว่า: ${errorDetails}`, 'error');
                     updateSigninStatus(false);
                     return;
                 }
-                
                 if (tokenResponse.access_token) {
-                    console.log("Access Token received successfully.");
                     gapi.client.setToken(tokenResponse);
                     updateSigninStatus(true);
                 } else {
-                    console.error("No access token received in the response.");
                     Swal.fire('เกิดข้อผิดพลาด', 'ไม่ได้รับ Access Token จาก Google', 'error');
                     updateSigninStatus(false);
                 }
             },
         });
         gisInited = true;
-        console.log("Google Identity Services (GIS) initialized.");
+        console.log("GIS initialized.");
     }
 
     // --- Main Logic ---
     $(document).ready(function() {
-        // --- Event Listeners ---
+        // Event Listeners
         authorizeButton.on('click', handleAuthClick);
         signoutButton.on('click', handleSignoutClick);
         $('#rawDataInput').on('input', convert);
         $('#conversionType').on('change', convert);
         $('#uploadBtn').on('click', exportAndUploadToDrive);
+        $('#exportLocalBtn').on('click', exportLocal); // **NEW**
         $('#clearBtn').on('click', clearAll);
-        $('#copyBtn').on('click', copyJson);
+        $('#copyBtn').on('click', copyOutput);
 
         convert(); // Initial conversion
     });
 
+    // --- Authentication ---
     function updateSigninStatus(isSignedIn) {
         if (isSignedIn) {
             authorizeButton.hide();
             signoutButton.show();
             uploadButton.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
-            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว');
+            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว').addClass('text-green-400').removeClass('text-gray-400');
         } else {
             authorizeButton.show();
             signoutButton.hide();
             uploadButton.prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
-            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์');
+            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์').removeClass('text-green-400').addClass('text-gray-400');
         }
     }
 
@@ -205,7 +210,7 @@
 
     function handleSignoutClick() {
         const token = gapi.client.getToken();
-        if (token !== null) {
+        if (token) {
             google.accounts.oauth2.revoke(token.access_token, () => {
                 gapi.client.setToken('');
                 updateSigninStatus(false);
@@ -213,7 +218,7 @@
         }
     }
 
-    // --- Data Parsing & Formatting (No changes) ---
+    // --- Data Parsing & Formatting ---
     function parseJsonString(input) { return JSON.parse(input); }
     function parsePipeString(input) {
         let processedInput = input.trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
@@ -262,49 +267,135 @@
         result[rootElement.tagName] = xmlNodeToJson(rootElement);
         return result;
     }
-    function formatDataForDisplay(data) {
-        if (Array.isArray(data) && data.every(item => 'Key' in item && 'Value' in item)) {
-            const resultLines = data.map(item => `    "${item.Key}": ${JSON.stringify(item.Value)}`);
-            return '{\n' + resultLines.join(',\n') + '\n}';
-        }
-        return JSON.stringify(data, null, 4);
-    }
+
+    // --- Core Conversion Function ---
     function convert() {
         const rawInput = $('#rawDataInput').val();
         const outputElement = $('#jsonOutput');
         const type = $('#conversionType').val();
         const trimmedInput = rawInput.trim();
         lastConvertedData = null;
-        if (!trimmedInput) { outputElement.text(''); return; }
+        lastFormattedString = '';
+
+        if (!trimmedInput) {
+            outputElement.empty();
+            return;
+        }
+
         try {
             let parsedData;
+            let formattedString;
+            let language = 'json'; // Default language for highlighting
+
             if (type === 'auto') {
-                if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) parsedData = parseXmlString(trimmedInput);
-                else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) parsedData = parseJsonString(trimmedInput);
-                else parsedData = parsePipeString(trimmedInput);
-            } else if (type === 'json-format') parsedData = parseJsonString(trimmedInput);
-            else if (type === 'pipe') parsedData = parsePipeString(trimmedInput);
-            else if (type === 'xml') parsedData = parseXmlString(trimmedInput);
-            lastConvertedData = parsedData;
-            outputElement.text(formatDataForDisplay(parsedData));
+                if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) {
+                    parsedData = parseXmlString(trimmedInput);
+                } else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
+                    parsedData = parseJsonString(trimmedInput);
+                } else {
+                    // Check if it looks like SQL
+                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER'];
+                    if (sqlKeywords.some(keyword => trimmedInput.toUpperCase().startsWith(keyword))) {
+                        formattedString = sqlFormatter.format(trimmedInput);
+                        language = 'sql';
+                    } else {
+                         parsedData = parsePipeString(trimmedInput);
+                    }
+                }
+            } else if (type === 'json-format') {
+                parsedData = parseJsonString(trimmedInput);
+            } else if (type === 'sql-format') { // **NEW** SQL Formatting
+                formattedString = sqlFormatter.format(trimmedInput);
+                language = 'sql';
+                // For SQL, the 'parsed data' is just the formatted string
+                lastConvertedData = { sql_query: formattedString };
+            } else if (type === 'pipe') {
+                parsedData = parsePipeString(trimmedInput);
+            } else if (type === 'xml') {
+                parsedData = parseXmlString(trimmedInput);
+            }
+
+            if (parsedData) {
+                lastConvertedData = parsedData;
+                formattedString = JSON.stringify(parsedData, null, 4);
+            }
+            
+            lastFormattedString = formattedString;
+
+            // Apply syntax highlighting
+            const highlighted = hljs.highlight(formattedString, { language: language, ignoreIllegals: true }).value;
+            outputElement.html(highlighted);
+
         } catch (error) {
-            outputElement.text(`เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`);
+            lastConvertedData = null;
+            lastFormattedString = '';
+            const errorMessage = `เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`;
+            outputElement.html(`<span class="text-red-400">${errorMessage}</span>`);
         }
     }
 
-    // --- Google Drive Upload Logic (No changes) ---
-    async function exportAndUploadToDrive() {
-        if (!gapi.client.getToken()) {
-            Swal.fire('ข้อผิดพลาด', 'กรุณาลงชื่อเข้าใช้ Google ก่อน', 'error');
-            return;
-        }
+    // --- Data Export & Upload ---
+
+    // **NEW** Local Export Function
+    async function exportLocal() {
         if (!lastConvertedData) {
-            Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการอัปโหลด', 'warning');
+            Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการ Export', 'warning');
             return;
         }
-        Swal.fire({ title: 'กำลังเตรียมไฟล์ Excel...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        const { value: fileType } = await Swal.fire({
+            title: 'เลือกรูปแบบไฟล์',
+            input: 'radio',
+            inputOptions: {
+                json: 'JSON',
+                xlsx: 'Excel (XLSX)'
+            },
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'คุณต้องเลือกรูปแบบไฟล์!'
+                }
+            }
+        });
+
+        if (fileType) {
+            if (fileType === 'json') {
+                downloadBlob(new Blob([lastFormattedString], { type: 'application/json;charset=utf-8' }), `data_${new Date().getTime()}.json`);
+            } else if (fileType === 'xlsx') {
+                try {
+                    const blob = createExcelBlob();
+                    if (blob) {
+                        downloadBlob(blob, `ExportedData_${new Date().getTime()}.xlsx`);
+                    }
+                } catch (error) {
+                     Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถสร้างไฟล์ Excel ได้: ${error.message}`, 'error');
+                }
+            }
+        }
+    }
+
+    function downloadBlob(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    }
+
+    function createExcelBlob() {
+        if (!lastConvertedData) {
+            Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลสำหรับสร้างไฟล์ Excel', 'warning');
+            return null;
+        }
+
         let dataForSheet, headerOrder = [];
+        // Deep copy to avoid modifying original data
         let dataToProcess = JSON.parse(JSON.stringify(lastConvertedData));
+
+        // Handle specific structures (pipe, xml etc.) to flatten them for Excel
         if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
             dataToProcess = dataToProcess.reduce((obj, item) => { obj[item.Key] = item.Value; return obj; }, {});
         }
@@ -316,6 +407,8 @@
             dataToProcess.parameter.par.forEach(p => { if (p && p.name) { dataToProcess[p.name] = p.value || ''; } });
             delete dataToProcess.parameter;
         }
+        
+        // Final check for array or object
         if (Array.isArray(dataToProcess)) {
             dataForSheet = dataToProcess;
             if (dataForSheet.length > 0) {
@@ -329,13 +422,30 @@
             dataForSheet = [{ Value: dataToProcess }];
             headerOrder = ['Value'];
         }
-        if (!dataForSheet || dataForSheet.length === 0) { Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่สามารถส่งออกได้', 'warning'); return; }
+
+        if (!dataForSheet || dataForSheet.length === 0) {
+            Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่สามารถส่งออกเป็น Excel ได้', 'warning');
+            return null;
+        }
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+        const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    }
+
+    async function exportAndUploadToDrive() {
+        if (!gapi.client.getToken()) {
+            Swal.fire('ข้อผิดพลาด', 'กรุณาลงชื่อเข้าใช้ Google ก่อน', 'error');
+            return;
+        }
+        Swal.fire({ title: 'กำลังเตรียมไฟล์ Excel...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
         try {
-            const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-            const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const blob = createExcelBlob();
+            if (!blob) return; // Error handled in createExcelBlob
+
             Swal.update({ title: 'กำลังค้นหาโฟลเดอร์ใน Google Drive...' });
             const folderId = await getOrCreateFolderId();
             Swal.update({ title: 'กำลังอัปโหลดไฟล์...', text: 'กรุณาอย่าปิดหน้าต่างนี้' });
@@ -347,6 +457,7 @@
             Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถอัปโหลดไฟล์ได้: ${error.message || JSON.stringify(error)}`, 'error');
         }
     }
+
     async function getOrCreateFolderId() {
         const response = await gapi.client.drive.files.list({
             q: `mimeType='application/vnd.google-apps.folder' and name='${FOLDER_NAME}' and trashed=false`,
@@ -358,9 +469,10 @@
         const createResponse = await gapi.client.drive.files.create({ resource: fileMetadata, fields: 'id' });
         return createResponse.result.id;
     }
+
     function uploadFileToDrive(folderId, blob, fileName) {
         return new Promise((resolve, reject) => {
-            const metadata = { name: fileName, parents: [folderId], mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+            const metadata = { name: fileName, parents: [folderId], mimeType: blob.type };
             const form = new FormData();
             form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             form.append('file', blob);
@@ -375,16 +487,17 @@
         });
     }
 
-    // --- Helper Functions (No changes) ---
+    // --- Helper Functions ---
     function clearAll() {
         $('#rawDataInput').val('');
-        $('#jsonOutput').text('');
+        $('#jsonOutput').empty();
         lastConvertedData = null;
+        lastFormattedString = '';
     }
-    function copyJson() {
-        const jsonText = $('#jsonOutput').text();
-        if (jsonText && !jsonText.startsWith('เกิดข้อผิดพลาด')) {
-            navigator.clipboard.writeText(jsonText).then(() => {
+
+    function copyOutput() {
+        if (lastFormattedString && !lastFormattedString.startsWith('เกิดข้อผิดพลาด')) {
+            navigator.clipboard.writeText(lastFormattedString).then(() => {
                 const originalText = $('#copyBtn').text();
                 $('#copyBtn').text('คัดลอกแล้ว!');
                 setTimeout(() => { $('#copyBtn').text(originalText); }, 2000);
