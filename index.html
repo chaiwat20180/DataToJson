@@ -67,10 +67,9 @@
     <div class="absolute top-4 right-4">
         <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
             <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
-            <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 5.05A1 1 0 016.465 3.636l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM5 11a1 1 0 100-2H3a1 1 0 100 2h2zM8 15a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1zm4.95-11.364a1 1 0 011.414 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+            <svg id="theme-toggle-light-icon" class="hidden w-5 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M13 3a1 1 0 1 0-2 0v2a1 1 0 1 0 2 0V3ZM6.343 4.929A1 1 0 0 0 4.93 6.343l1.414 1.414a1 1 0 0 0 1.414-1.414L6.343 4.929Zm12.728 1.414a1 1 0 0 0-1.414-1.414l-1.414 1.414a1 1 0 0 0 1.414 1.414l1.414-1.414ZM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm-9 4a1 1 0 1 0 0 2h2a1 1 0 1 0 0-2H3Zm16 0a1 1 0 1 0 0 2h2a1 1 0 1 0 0-2h-2ZM7.757 17.657a1 1 0 1 0-1.414-1.414l-1.414 1.414a1 1 0 1 0 1.414 1.414l1.414-1.414Zm9.9-1.414a1 1 0 0 0-1.414 1.414l1.414 1.414a1 1 0 0 0 1.414-1.414l-1.414-1.414ZM13 19a1 1 0 1 0-2 0v2a1 1 0 1 0 2 0v-2Z" clip-rule="evenodd"/></svg>
         </button>
     </div>
-
     <div class="w-full max-w-7xl mx-auto flex flex-col flex-grow">
         <!-- Header -->
         <header class="text-center mb-4">
@@ -185,13 +184,13 @@
     function setAppTheme(theme, fromUserAction = false) {
         if (theme === 'dark') {
             document.documentElement.classList.add('dark');
-            themeToggleLightIcon.addClass('hidden');
-            themeToggleDarkIcon.removeClass('hidden');
-            if (fromUserAction) localStorage.setItem('color-theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
             themeToggleDarkIcon.addClass('hidden');
             themeToggleLightIcon.removeClass('hidden');
+            if (fromUserAction) localStorage.setItem('color-theme', 'darklight');
+        } else {
+            document.documentElement.classList.remove('dark');
+            themeToggleLightIcon.addClass('hidden');
+            themeToggleDarkIcon.removeClass('hidden');
             if (fromUserAction) localStorage.setItem('color-theme', 'light');
         }
         // Re-apply the correct highlight theme after changing app theme
@@ -206,7 +205,7 @@
         if (savedTheme) {
             setAppTheme(savedTheme);
         } else {
-            setAppTheme(systemPrefersDark ? 'dark' : 'light');
+            setAppTheme(systemPrefersDark ? 'dark' : 'lightdark');
         }
 
         // --- Event Listeners ---
