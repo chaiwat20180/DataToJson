@@ -316,35 +316,72 @@
         });
         return result;
     }
+    
+    // --- UPDATED XML PARSING FUNCTION ---
     function parseXmlString(xmlString) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "application/xml");
-        if (xmlDoc.getElementsByTagName("parsererror").length) throw new Error("Invalid XML format");
+
+        // Check for parsing errors
+        if (xmlDoc.getElementsByTagName("parsererror").length) {
+            throw new Error("Invalid XML format. Please check the XML structure.");
+        }
+
+        // Recursive function to convert XML node to JSON object
         function xmlNodeToJson(node) {
-            if (node.nodeType === 3 && node.nodeValue.trim()) return node.nodeValue.trim();
-            if (node.nodeType !== 1) return null;
+            // Only process element nodes
+            if (node.nodeType !== 1) {
+                return null;
+            }
+
             const obj = {};
-            const children = Array.from(node.children);
-            if (children.length > 0) {
-                children.forEach(child => {
+
+            // Process attributes: store with a prefix '@'
+            if (node.hasAttributes()) {
+                for (const attr of node.attributes) {
+                    obj[`${attr.name}`] = attr.value;
+                }
+            }
+
+            // Process child elements
+            if (node.children.length > 0) {
+                for (const child of node.children) {
                     const childName = child.tagName;
-                    let childJson = (child.tagName === 'par' && child.hasAttribute('name'))
-                        ? { name: child.getAttribute('name'), value: child.textContent.trim() }
-                        : xmlNodeToJson(child);
-                    if (!obj[childName]) obj[childName] = childJson;
-                    else {
-                        if (!Array.isArray(obj[childName])) obj[childName] = [obj[childName]];
+                    const childJson = xmlNodeToJson(child); // Recursive call
+
+                    // If property doesn't exist, create it
+                    if (!obj.hasOwnProperty(childName)) {
+                        obj[childName] = childJson;
+                    } else {
+                        // If property exists, turn it into an array
+                        if (!Array.isArray(obj[childName])) {
+                            obj[childName] = [obj[childName]];
+                        }
                         obj[childName].push(childJson);
                     }
-                });
-            } else if (node.textContent.trim()) return node.textContent.trim();
+                }
+            }
+            // Process text content ONLY if there are no child elements
+            else if (node.textContent.trim()) {
+                // If the node already has attributes, add text as a special key
+                if (Object.keys(obj).length > 0) {
+                    obj['#text'] = node.textContent.trim();
+                } else {
+                    // If no attributes, the node's value is just the text
+                    return node.textContent.trim();
+                }
+            }
+            
+            // Return empty object for tags with no attributes, children, or text (e.g., <tag/>)
             return obj;
         }
+
         const rootElement = xmlDoc.documentElement;
         const result = {};
         result[rootElement.tagName] = xmlNodeToJson(rootElement);
         return result;
     }
+
 
     // **NEW** Function to recursively parse string values inside a JSON object
     function recursivelyParseValues(data) {
@@ -407,7 +444,6 @@
                     language = 'json'; 
                 } else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
                     parsedData = parseJsonString(trimmedInput);
-                    // **MODIFIED** Recursively parse string values within the JSON
                     parsedData = recursivelyParseValues(parsedData);
                     language = 'json';
                 } else {
@@ -423,7 +459,6 @@
                 }
             } else if (type === 'json-format') {
                 parsedData = parseJsonString(trimmedInput);
-                // **MODIFIED** Recursively parse string values within the JSON
                 parsedData = recursivelyParseValues(parsedData);
                 language = 'json';
             } else if (type === 'sql-format') {
