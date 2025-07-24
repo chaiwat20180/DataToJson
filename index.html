@@ -344,7 +344,7 @@
             // 2. Process attributes - they always go into the object
             if (node.hasAttributes()) {
                 for (const attr of node.attributes) {
-                    obj[`@${attr.name}`] = attr.value;
+                    obj[`${attr.name}`] = attr.value;
                 }
             }
 
