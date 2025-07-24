@@ -69,6 +69,9 @@
         textarea {
             resize: both;
         }
+        .resize {
+            resize: both;
+        }
     </style>
 </head>
 <body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col min-h-screen items-center p-4 sm:p-6 md:p-8">
@@ -321,63 +324,71 @@
         return result;
     }
     
-    // --- UPDATED XML PARSING FUNCTION ---
+    // --- FIXED XML PARSING FUNCTION ---
     function parseXmlString(xmlString) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "application/xml");
 
-        // Check for parsing errors
+        // Check for parsing errors which DOMParser indicates with a specific tag
         if (xmlDoc.getElementsByTagName("parsererror").length) {
-            throw new Error("Invalid XML format. Please check the XML structure.");
+            const errorNode = xmlDoc.getElementsByTagName("parsererror")[0];
+            const errorText = errorNode ? errorNode.textContent : "Unknown XML parsing error.";
+            throw new Error(`Invalid XML format: ${errorText}`);
         }
 
-        // Recursive function to convert XML node to JSON object
+        // Recursive function to convert an XML node to a JSON object
         function xmlNodeToJson(node) {
-            // Only process element nodes
-            if (node.nodeType !== 1) {
-                return null;
-            }
-
+            // 1. Create the base object for the current node
             const obj = {};
 
-            // Process attributes: store with a prefix '@'
+            // 2. Process attributes - they always go into the object
             if (node.hasAttributes()) {
                 for (const attr of node.attributes) {
                     obj[`@${attr.name}`] = attr.value;
                 }
             }
 
-            // Process child elements
+            // 3. Process child elements
             if (node.children.length > 0) {
                 for (const child of node.children) {
                     const childName = child.tagName;
-                    const childJson = xmlNodeToJson(child); // Recursive call
+                    const childJson = xmlNodeToJson(child);
 
-                    // If property doesn't exist, create it
+                    // If the property doesn't exist yet, create it
                     if (!obj.hasOwnProperty(childName)) {
                         obj[childName] = childJson;
                     } else {
-                        // If property exists, turn it into an array
+                        // If it exists, make sure it's an array and push the new child
                         if (!Array.isArray(obj[childName])) {
-                            obj[childName] = [obj[childName]];
+                            obj[childName] = [obj[childName]]; // Convert to array if it's not already
                         }
                         obj[childName].push(childJson);
                     }
                 }
+                return obj; // When there are children, the object is the result
             }
-            // Process text content ONLY if there are no child elements
-            else if (node.textContent.trim()) {
-                // If the node already has attributes, add text as a special key
+
+            // 4. Process text content (only if there are no child elements)
+            const textContent = node.textContent.trim();
+            if (textContent) {
+                // If there are attributes, the text becomes a '#text' property
                 if (Object.keys(obj).length > 0) {
-                    obj['#text'] = node.textContent.trim();
+                    obj['#text'] = textContent;
+                    return obj;
                 } else {
                     // If no attributes, the node's value is just the text
-                    return node.textContent.trim();
+                    return textContent;
                 }
             }
-            
-            // Return empty object for tags with no attributes, children, or text (e.g., <tag/>)
-            return obj;
+
+            // 5. Handle empty elements (no children, no text)
+            // If it has attributes, return the object with just attributes
+            if (Object.keys(obj).length > 0) {
+                return obj;
+            }
+
+            // If it's a truly empty tag like <tag/> with no attributes, return an empty string
+            return "";
         }
 
         const rootElement = xmlDoc.documentElement;
@@ -387,38 +398,25 @@
     }
 
 
-    // **NEW** Function to recursively parse string values inside a JSON object
     function recursivelyParseValues(data) {
         if (typeof data === 'string') {
-            // Attempt to parse the string itself.
             try {
-                // Is it a pipe-separated string? A simple check.
-                // It must contain a pipe and at least one newline character.
                 if (data.includes('|') && data.match(/\r\n|\r|\n/)) {
-                    // We need to handle potential errors from parsePipeString
                     return parsePipeString(data);
                 }
-            } catch (e) { /* ignore if pipe parsing fails */ }
-            
-            // If no parsing worked, return the original string
+            } catch (e) { /* ignore */ }
             return data;
-
         } else if (Array.isArray(data)) {
-            // If it's an array, map over its elements and parse them.
             return data.map(item => recursivelyParseValues(item));
         } else if (data !== null && typeof data === 'object') {
-            // If it's an object, go through its keys.
             const newObj = {};
             for (const key in data) {
                 if (Object.prototype.hasOwnProperty.call(data, key)) {
-                    // Recursively parse the value of each key.
                     newObj[key] = recursivelyParseValues(data[key]);
                 }
             }
             return newObj;
         }
-        
-        // Return primitives (numbers, booleans, null) as-is.
         return data;
     }
 
@@ -427,13 +425,22 @@
         const rawInput = $('#rawDataInput').val();
         const outputElement = $('#jsonOutput');
         const type = $('#conversionType').val();
-        const trimmedInput = rawInput.trim();
+        
+        // Remove BOM (Byte Order Mark) and then trim whitespace
+        const trimmedInput = rawInput.replace(/^\uFEFF/, '').trim();
+        
+        // Always reset data on every conversion attempt
         lastConvertedData = null;
         lastFormattedString = '';
 
         if (!trimmedInput) {
             outputElement.empty();
             updateHighlightTheme('json'); // Reset to default theme
+            
+            // **FIX:** Reset sizes when input is cleared
+            $('#rawDataInput').removeAttr('style');
+            $('#jsonOutput').parent().parent().removeAttr('style');
+            
             return;
         }
 
@@ -443,6 +450,7 @@
             let language = 'json';
 
             if (type === 'auto') {
+                // Auto-detect logic
                 if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) {
                     parsedData = parseXmlString(trimmedInput);
                     language = 'json'; 
@@ -451,7 +459,7 @@
                     parsedData = recursivelyParseValues(parsedData);
                     language = 'json';
                 } else {
-                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET'];
+                    const sqlKeywords = ['BEGIN','SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET','WITH', 'EXEC', 'EXECUTE', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'GROUP BY', 'ORDER BY', 'HAVING', 'UNION', 'UNION ALL', 'EXISTS', 'IN', 'LIKE', 'BETWEEN', 'AND', 'OR', 'NOT', 'AS', 'ON', 'VALUES', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CAST', 'CONVERT', 'TOP', 'LIMIT', 'OFFSET', 'DISTINCT', 'INDEX', 'PRIMARY KEY', 'FOREIGN KEY', 'CHECK', 'DEFAULT', 'TRIGGER', 'VIEW', 'PROCEDURE', 'FUNCTION', 'TRANSACTION', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'GRANT', 'REVOKE'];
                     if (sqlKeywords.some(keyword => trimmedInput.toUpperCase().startsWith(keyword))) {
                         formattedString = sqlFormatter.format(trimmedInput, { language: 'tsql' });
                         language = 'sql';
@@ -675,10 +683,9 @@
 
     // --- Helper Functions ---
     function clearAll() {
-        $('#rawDataInput').val('');
-        $('#jsonOutput').empty();
-        lastConvertedData = null;
-        lastFormattedString = '';
+        // **FIX:** Set value to empty and trigger the input event, 
+        // which will handle clearing the output and resetting sizes.
+        $('#rawDataInput').val('').trigger('input');
     }
 
     function copyOutput() {
