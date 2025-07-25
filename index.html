@@ -1,36 +1,39 @@
 <!DOCTYPE html>
-<html lang="th" class="dark"> <!-- Start in dark mode by default -->
+<html lang="th" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ตัวแปลงข้อมูลอัจฉริยะ (JSON, SQL) พร้อม Export</title>
+    <title>ตัวแปลงข้อมูลอัจฉริยะ (ดีไซน์ใหม่)</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Explicitly configure Tailwind for class-based dark mode -->
     <script>
         tailwind.config = {
             darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sarabun': ['Sarabun', 'sans-serif'],
+                    },
+                }
+            }
         }
     </script>
-    <!-- jQuery -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <!-- SheetJS (XLSX) for Excel Export -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <!-- SweetAlert2 for notifications -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- highlight.js for syntax highlighting -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     
-    <!-- A11y Themes (for JSON/XML) -->
+    <!-- Libraries (jQuery, SheetJS, SweetAlert2, highlight.js, SQL Formatter) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sql-formatter@15.3.1/dist/sql-formatter.min.js"></script>
+
+    <!-- Syntax Highlighting Themes -->
     <link id="a11y-light-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/a11y-light.min.css" disabled>
     <link id="a11y-dark-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/a11y-dark.min.css" disabled>
-    <!-- GitHub Themes (for SQL) -->
     <link id="github-light-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" disabled>
     <link id="github-dark-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" disabled>
     
-    <!-- SQL Formatter -->
-    <script src="https://cdn.jsdelivr.net/npm/sql-formatter@15.3.1/dist/sql-formatter.min.js"></script>
-    <!-- Fonts -->
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -42,108 +45,156 @@
     <style>
         body {
             font-family: 'Sarabun', sans-serif;
-            transition: background-color 0.3s, color 0.3s;
+            background-color: #f8fafc;
         }
-        /* Custom scrollbar */
+        .dark body {
+            background-color: #0f172a;
+        }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        .dark ::-webkit-scrollbar-track { background: #2b2b2b; }
-        .dark ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
-        .dark ::-webkit-scrollbar-thumb:hover { background: #555555; }
-        html:not(.dark) ::-webkit-scrollbar-track { background: #f1f5f9; }
+        .dark ::-webkit-scrollbar-track { background: #1e293b; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        html:not(.dark) ::-webkit-scrollbar-track { background: #e2e8f0; }
         html:not(.dark) ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
         html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-
-        /* Syntax Highlighting style override */
-        #jsonOutput { white-space: pre-wrap; word-break: break-all; }
         .hljs {
-            transition: background-color 0.3s;
-            background: transparent !important; /* Let parent div control background */
+            background: transparent !important;
         }
-        .copyright {
-            text-align: center;
-            margin-top: 50px;
-            font-size: 0.9rem;
-            color: #888;
+        .resizable-container {
+            resize: vertical;
+            overflow: auto;
+            min-height: 250px;
+            height: 55vh;
         }
-        /* Allow textarea to be resized in both directions */
-        textarea {
-            resize: both;
+        .focus-ring-custom {
+            --tw-ring-color: #3b82f6;
         }
-        .resize {
-            resize: both;
+        .dark .focus-ring-custom {
+            --tw-ring-color: #60a5fa;
         }
     </style>
 </head>
-<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col min-h-screen items-center p-4 sm:p-6 md:p-8">
+<body class="text-slate-800 dark:text-slate-200 transition-colors duration-300">
 
-    <!-- Theme Toggle Button -->
-    <div class="absolute top-4 right-4">
-        <button id="theme-toggle" type="button" class="text-gray-800 border border-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
-            <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
-            <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M13 3a1 1 0 1 0-2 0v2a1 1 0 1 0 2 0V3ZM6.343 4.929A1 1 0 0 0 4.93 6.343l1.414 1.414a1 1 0 0 0 1.414-1.414L6.343 4.929Zm12.728 1.414a1 1 0 0 0-1.414-1.414l-1.414 1.414a1 1 0 0 0 1.414 1.414l1.414-1.414ZM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm-9 4a1 1 0 1 0 0 2h2a1 1 0 1 0 0-2H3Zm16 0a1 1 0 1 0 0 2h2a1 1 0 1 0 0-2h-2ZM7.757 17.657a1 1 0 1 0-1.414-1.414l-1.414 1.414a1 1 0 1 0 1.414 1.414l1.414-1.414Zm9.9-1.414a1 1 0 0 0-1.414 1.414l1.414 1.414a1 1 0 0 0 1.414-1.414l-1.414-1.414ZM13 19a1 1 0 1 0-2 0v2a1 1 0 1 0 2 0v-2Z" clip-rule="evenodd"/></svg>
-        </button>
+    <!-- Loading Overlay with Progress -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="flex flex-col items-center gap-4 text-white text-center p-4">
+            <svg class="animate-spin h-10 w-10 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-xl font-semibold">กำลังเตรียมระบบ Google...</p>
+            <div class="w-full bg-slate-600 rounded-full h-2.5 max-w-xs">
+                <div id="loading-progress-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="loading-progress-text" class="text-lg font-semibold">0%</p>
+        </div>
     </div>
 
-    <div class="w-full max-w-7xl mx-auto flex flex-col flex-grow">
-        <!-- Header -->
-        <header class="text-center mb-4">
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">ตัวแปลงข้อมูลอัจฉริยะ</h1>
-            <p class="text-gray-500 dark:text-gray-400 mt-2">วางข้อมูล > แปลง > Export หรืออัปโหลดไป Google Drive</p>
-        </header>
+    <!-- Main Container -->
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col min-h-screen">
 
-        <!-- Controls Container -->
-        <div class="w-full max-w-4xl mx-auto mb-6">
-            <!-- Conversion Type Selector -->
-            <div class="mb-4">
-                <label for="conversionType" class="block text-center text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">ประเภทการแปลง</label>
-                <select id="conversionType" class="w-full p-2 bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <option value="auto">ตรวจจับอัตโนมัติ (Auto-Detect)</option>
-                    <option value="json-format">จัดรูปแบบ JSON (Format JSON)</option>
-                    <option value="sql-format">จัดรูปแบบ SQL (SQL Formatter)</option>
-                    <option value="pipe">ข้อความคั่นด้วย | (Pipe-Separated)</option>
-                    <option value="xml">XML to JSON</option>
-                </select>
+        <!-- Header and Theme Toggle -->
+        <header class="flex justify-between items-center mb-6">
+            <div class="text-center sm:text-left">
+                <h1 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">ตัวแปลงข้อมูลอัจฉริยะ</h1>
+                <p class="text-slate-500 dark:text-slate-400 mt-1">เครื่องมือสำหรับแปลง, จัดรูปแบบ, และส่งออกข้อมูล</p>
             </div>
-            <!-- Action Buttons -->
-            <div class="flex justify-center items-center flex-wrap gap-3 sm:gap-4">
-                <button id="copyBtn" class="px-5 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">คัดลอก</button>
-                <button id="exportLocalBtn" class="px-5 py-2 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700">Export as File</button>
-                <button id="uploadBtn" class="px-5 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 opacity-50 cursor-not-allowed" disabled>Upload to Drive</button>
-                <button id="clearBtn" class="px-5 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700">ล้างข้อมูล</button>
+            <button id="theme-toggle" type="button" class="p-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-800 focus-ring-custom">
+                <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+            </button>
+        </header>
+        
+        <!-- Controls Panel -->
+        <div class="bg-white dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
+                <!-- Conversion Type -->
+                <div class="lg:col-span-1">
+                    <label for="conversionType" class="block text-sm font-medium mb-1.5 text-slate-600 dark:text-slate-300">ประเภทการแปลง</label>
+                    <select id="conversionType" class="w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:border-transparent focus-ring-custom">
+                        <option value="auto">ตรวจจับอัตโนมัติ</option>
+                        <option value="json-format">จัดรูปแบบ JSON</option>
+                        <option value="sql-format">จัดรูปแบบ SQL</option>
+                        <option value="pipe">ข้อความคั่นด้วย |</option>
+                        <option value="xml">XML to JSON</option>
+                    </select>
+                </div>
+                <!-- Action Buttons -->
+                <div class="lg:col-span-3 flex flex-wrap items-center justify-start md:justify-end gap-2 sm:gap-3">
+                    <button id="copyBtn" class="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zM-1 7a.5.5 0 0 1 .5-.5h15a.5.5 0 0 1 0 1h-15A.5.5 0 0 1-1 7zM5 1.5A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5v1A1.5 1.5 0 0 1 9.5 4h-3A1.5 1.5 0 0 1 5 2.5v-1z"/></svg>
+                        คัดลอก
+                    </button>
+                    <button id="exportLocalBtn" class="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white font-semibold rounded-lg shadow-md hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+                        Export
+                    </button>
+                    <button id="uploadBtn" class="flex items-center gap-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.233 4.14a.5.5 0 0 1 .707.707l-2.5 2.5a.5.5 0 0 1-.707 0l-1-1a.5.5 0 1 1 .707-.707L9 6.793l2.233-2.653z"/><path d="M4.5 9a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h12z"/></svg>
+                        Upload to Drive
+                    </button>
+                    <button id="clearBtn" class="flex items-center gap-2 px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/></svg>
+                        ล้างข้อมูล
+                    </button>
+                </div>
             </div>
-             <!-- Google Auth Buttons -->
-            <div class="flex justify-center items-center flex-wrap gap-4 mt-4">
-                 <button id="authorize_button" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">ลงชื่อเข้าใช้ Google</button>
-                <button id="signout_button" style="display: none;" class="px-6 py-2 bg-yellow-600 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-700">ออกจากระบบ Google</button>
+             <!-- Google Auth Area -->
+            <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div id="auth-status" class="text-sm text-slate-500 dark:text-slate-400"></div>
+                <button id="authorize_button" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all opacity-50 cursor-not-allowed" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z"/></svg>
+                    ลงชื่อเข้าใช้ Google
+                </button>
+                <button id="signout_button" style="display: none;" class="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg shadow-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-all">
+                    ออกจากระบบ
+                </button>
             </div>
-             <div id="auth-status" class="text-center mt-3 text-sm text-gray-500 dark:text-gray-400">กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์</div>
         </div>
 
         <!-- Main Content: Input and Output -->
-        <main class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+        <main id="main-container" class="flex-grow flex flex-col lg:flex-row w-full">
             <!-- Input Column -->
-            <div class="flex flex-col">
-                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">ข้อมูลนำเข้า (Input)</label>
-                <textarea id="rawDataInput"
-                          class="w-full h-full min-h-[300px] md:min-h-[500px] p-4 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm text-gray-800 dark:text-gray-200"
-                          placeholder="วางข้อมูลที่คั่นด้วย |, JSON, XML หรือ SQL ที่นี่..."></textarea>
+            <div id="input-column" class="flex flex-col" style="width: calc(50% - 6px);">
+                <label for="rawDataInput" class="text-lg font-semibold mb-2 text-slate-700 dark:text-slate-300">ข้อมูลนำเข้า (Input)</label>
+                <div class="resizable-container relative w-full flex-grow rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm transition-all duration-200 ease-in-out">
+                    <div id="drop-zone" class="w-full h-full">
+                         <div id="drop-zone-prompt" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center pointer-events-none z-0 text-slate-400 dark:text-slate-500">
+                            <svg class="mx-auto h-12 w-12" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <p class="mt-2 text-sm">วางข้อความ, ลากไฟล์มาที่นี่ หรือ <button type="button" id="browse-files-btn" class="font-semibold text-blue-600 dark:text-blue-400 hover:underline pointer-events-auto">เลือกไฟล์</button></p>
+                        </div>
+                        <textarea id="rawDataInput" class="relative w-full h-full p-4 bg-transparent rounded-xl outline-none font-mono text-sm text-slate-800 dark:text-slate-200 resize-none z-10" placeholder=""></textarea>
+                        <input type="file" id="file-input" class="hidden">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Splitter -->
+            <div id="splitter" class="hidden lg:flex items-center justify-center cursor-col-resize group" style="flex: 0 0 12px;">
+                <div class="w-1 h-20 bg-slate-300 dark:bg-slate-600 rounded-full group-hover:bg-blue-500 transition-colors"></div>
             </div>
 
             <!-- Output Column -->
-            <div class="flex flex-col">
-                <label for="jsonOutput" class="text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">ผลลัพธ์ (Output)</label>
-                <div class="relative w-full h-full min-h-[300px] md:min-h-[500px] bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-inner overflow-auto resize">
-                    <pre class="w-full p-4"><code id="jsonOutput" class="font-mono text-sm"></code></pre>
+            <div id="output-column" class="flex flex-col" style="width: calc(50% - 6px);">
+                <label for="jsonOutput" class="text-lg font-semibold mb-2 text-slate-700 dark:text-slate-300">ผลลัพธ์ (Output)</label>
+                <div class="resizable-container relative w-full flex-grow bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                    <pre class="w-full h-full p-4"><code id="jsonOutput" class="font-mono text-sm"></code></pre>
                 </div>
             </div>
         </main>
-        <div class="copyright">
-                &copy; <span id="currentYear"></span> <a href="https://github.com/chaiwat20180" class="text-decoration-none text-blue-600">Chaiwat Kwanta</a> All rights reserved.
-        </div>
+        
+        <!-- Footer -->
+        <footer class="text-center mt-8 py-4 text-sm text-slate-500 dark:text-slate-400">
+            &copy; <span id="currentYear"></span> <a href="https://github.com/chaiwat20180" target="_blank" rel="noopener noreferrer" class="font-semibold text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">Chaiwat Kwanta</a>. All rights reserved.
+        </footer>
     </div>
 
     <script>
-    // --- Google Drive API Configuration ---
+    // ===================================================================================
+    // JAVASCRIPT LOGIC
+    // ===================================================================================
+
     const API_KEY = 'AIzaSyCShTHlV2oFr7QMNetG81V_x99zeDXBUtU'; 
     const CLIENT_ID = '839014236860-pfb60nkl7klpej2bf67tsh5qhjnttei9.apps.googleusercontent.com';
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -154,115 +205,188 @@
     let gisInited = false;
     let lastConvertedData = null;
     let lastFormattedString = '';
+    let apiLoadTimeout;
 
-    // --- UI Elements ---
+    // --- Loading Progress Variables ---
+    let gapiProgress = 0;
+    let gisProgress = 0;
+
     const authorizeButton = $('#authorize_button');
     const signoutButton = $('#signout_button');
     const uploadButton = $('#uploadBtn');
     const authStatusDiv = $('#auth-status');
     const themeToggleBtn = $('#theme-toggle');
-    const themeToggleDarkIcon = $('#theme-toggle-dark-icon');
-    const themeToggleLightIcon = $('#theme-toggle-light-icon');
-    
-    // Theme stylesheet elements
-    const a11yLightTheme = $('#a11y-light-theme');
-    const a11yDarkTheme = $('#a11y-dark-theme');
-    const githubLightTheme = $('#github-light-theme');
-    const githubDarkTheme = $('#github-dark-theme');
 
-    $('#currentYear').text(`2024 - ${new Date().getFullYear()}`);
+    $('#currentYear').text(new Date().getFullYear());
 
-    // --- Theme Switching Logic ---
     function updateHighlightTheme(language) {
-        // Disable all themes first
-        a11yLightTheme.prop('disabled', true);
-        a11yDarkTheme.prop('disabled', true);
-        githubLightTheme.prop('disabled', true);
-        githubDarkTheme.prop('disabled', true);
-
+        $('#a11y-light-theme, #a11y-dark-theme, #github-light-theme, #github-dark-theme').prop('disabled', true);
         const isDarkMode = document.documentElement.classList.contains('dark');
-
         if (language === 'sql') {
-            // Use GitHub theme for SQL
-            if (isDarkMode) {
-                githubDarkTheme.prop('disabled', false);
-            } else {
-                githubLightTheme.prop('disabled', false);
-            }
+            $(isDarkMode ? '#github-dark-theme' : '#github-light-theme').prop('disabled', false);
         } else {
-            // Use A11y theme for everything else (JSON, XML)
-            if (isDarkMode) {
-                a11yDarkTheme.prop('disabled', false);
-            } else {
-                a11yLightTheme.prop('disabled', false);
-            }
+            $(isDarkMode ? '#a11y-dark-theme' : '#a11y-light-theme').prop('disabled', false);
         }
     }
 
     function setAppTheme(theme, fromUserAction = false) {
         if (theme === 'dark') {
             document.documentElement.classList.add('dark');
-            themeToggleDarkIcon.addClass('hidden');
-            themeToggleLightIcon.removeClass('hidden');
+            $('#theme-toggle-dark-icon').addClass('hidden');
+            $('#theme-toggle-light-icon').removeClass('hidden');
             if (fromUserAction) localStorage.setItem('color-theme', 'dark');
         } else {
             document.documentElement.classList.remove('dark');
-            themeToggleLightIcon.addClass('hidden');
-            themeToggleDarkIcon.removeClass('hidden');
+            $('#theme-toggle-light-icon').addClass('hidden');
+            $('#theme-toggle-dark-icon').removeClass('hidden');
             if (fromUserAction) localStorage.setItem('color-theme', 'light');
         }
-        // Re-apply the correct highlight theme after changing app theme
         convert();
     }
 
-    // --- Main Logic ---
-    $(document).ready(function() {
-        // --- Theme Initializer ---
-        const savedTheme = localStorage.getItem('color-theme');
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (savedTheme) {
-            setAppTheme(savedTheme);
-        } else {
-            setAppTheme(systemPrefersDark ? 'dark' : 'light');
-        }
+    function updateLoadingProgress() {
+        const totalProgress = gapiProgress + gisProgress;
+        $('#loading-progress-bar').css('width', totalProgress + '%');
+        $('#loading-progress-text').text(totalProgress + '%');
+    }
 
-        // --- Event Listeners ---
+    function checkApiReady() {
+        if (gapiInited && gisInited) {
+            clearTimeout(apiLoadTimeout);
+            $('#loading-overlay').fadeOut();
+            authorizeButton.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
+            updateSigninStatus(gapi.client.getToken() !== null);
+            console.log("Google APIs are ready.");
+        }
+    }
+
+    $(document).ready(function() {
+        apiLoadTimeout = setTimeout(() => {
+            if (!gapiInited || !gisInited) {
+                $('#loading-overlay').fadeOut();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'การโหลดล้มเหลว',
+                    html: `ไม่สามารถเชื่อมต่อกับระบบของ Google ได้<br><br>
+                           <b>สาเหตุที่เป็นไปได้:</b> การตั้งค่า Google Client ID ของคุณไม่ถูกต้อง<br><br>
+                           <b>วิธีแก้ไข:</b><br>
+                           1. ไปที่ Google Cloud Console<br>
+                           2. ในส่วน Credentials > OAuth 2.0 Client IDs<br>
+                           3. เพิ่ม <b>${window.location.origin}</b> ใน 'Authorized JavaScript origins'`,
+                    confirmButtonText: 'เข้าใจแล้ว'
+                });
+            }
+        }, 15000);
+
+        const savedTheme = localStorage.getItem('color-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        setAppTheme(savedTheme);
+
         themeToggleBtn.on('click', () => {
-            const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-            setAppTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+            const newTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+            setAppTheme(newTheme, true);
         });
 
         authorizeButton.on('click', handleAuthClick);
         signoutButton.on('click', handleSignoutClick);
-        $('#rawDataInput').on('input', convert);
+        $('#rawDataInput').on('input', handleTextInput);
         $('#conversionType').on('change', convert);
         $('#uploadBtn').on('click', exportAndUploadToDrive);
         $('#exportLocalBtn').on('click', exportLocal);
         $('#clearBtn').on('click', clearAll);
         $('#copyBtn').on('click', copyOutput);
+        $('#browse-files-btn').on('click', (e) => { e.stopPropagation(); $('#file-input').click(); });
+        $('#file-input').on('change', (e) => handleFiles(e.target.files));
+        
+        const dropZone = $('#drop-zone');
+        dropZone.on('dragover', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            dropZone.parent().addClass('ring-2 ring-blue-500 bg-blue-50 dark:bg-slate-700');
+        });
+        dropZone.on('dragleave', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            dropZone.parent().removeClass('ring-2 ring-blue-500 bg-blue-50 dark:bg-slate-700');
+        });
+        dropZone.on('drop', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            dropZone.parent().removeClass('ring-2 ring-blue-500 bg-blue-50 dark:bg-slate-700');
+            handleFiles(e.originalEvent.dataTransfer.files);
+        });
+        
+        togglePromptVisibility();
 
+        const splitter = $('#splitter');
+        const inputColumn = $('#input-column');
+        const outputColumn = $('#output-column');
+        const mainContainer = $('#main-container');
+        let isDragging = false;
+        splitter.on('mousedown', function(e) {
+            e.preventDefault();
+            isDragging = true;
+            $('body').css({'user-select': 'none', 'cursor': 'col-resize'});
+            $(document).on('mousemove.resizer', function(e) {
+                if (!isDragging) return;
+                const containerOffset = mainContainer.offset().left;
+                const containerWidth = mainContainer.width();
+                const splitterWidth = splitter.outerWidth();
+                let mouseX = e.pageX - containerOffset;
+                const availableWidth = containerWidth - splitterWidth;
+                let leftWidth = mouseX - (splitterWidth / 2);
+                if (leftWidth < 200) leftWidth = 200;
+                if (leftWidth > availableWidth - 200) leftWidth = availableWidth - 200;
+                inputColumn.css('width', `${leftWidth}px`);
+                outputColumn.css('width', `${availableWidth - leftWidth}px`);
+            });
+            $(document).on('mouseup.resizer', function() {
+                isDragging = false;
+                $(document).off('mousemove.resizer mouseup.resizer');
+                $('body').css({'user-select': 'auto', 'cursor': 'auto'});
+            });
+        });
     });
+    
+    function togglePromptVisibility() {
+        if ($('#rawDataInput').val()) $('#drop-zone-prompt').hide();
+        else $('#drop-zone-prompt').show();
+    }
+    
+    function handleTextInput() {
+        togglePromptVisibility();
+        convert();
+    }
 
-    // --- Authentication ---
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => $('#rawDataInput').val(e.target.result).trigger('input');
+            reader.onerror = () => Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ได้', 'error');
+            reader.readAsText(file);
+        }
+    }
+
     function updateSigninStatus(isSignedIn) {
         if (isSignedIn) {
             authorizeButton.hide();
             signoutButton.show();
-            uploadButton.prop('disabled', false).removeClass('opacity-50 cursor-not-allowed');
-            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว').addClass('text-green-500 dark:text-green-400').removeClass('text-gray-500 dark:text-gray-400');
+            uploadButton.prop('disabled', false).removeClass('opacity-50');
+            authStatusDiv.text('คุณได้ลงชื่อเข้าใช้ Google แล้ว').addClass('text-green-500 dark:text-green-400').removeClass('text-slate-500 dark:text-slate-400');
         } else {
             authorizeButton.show();
             signoutButton.hide();
-            uploadButton.prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
-            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์').removeClass('text-green-500 dark:text-green-400').addClass('text-gray-500 dark:text-gray-400');
+            uploadButton.prop('disabled', true).addClass('opacity-50');
+            authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์').removeClass('text-green-500 dark:text-green-400').addClass('text-slate-500 dark:text-slate-400');
         }
     }
 
-    // --- Google API Functions ---
     function gapiLoaded() {
         gapi.load('client', () => {
             gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] })
-              .then(() => { gapiInited = true; console.log("GAPI initialized."); })
+              .then(() => {
+                  gapiInited = true;
+                  gapiProgress = 50;
+                  updateLoadingProgress();
+                  checkApiReady();
+              })
               .catch(err => Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error'));
         });
     }
@@ -283,13 +407,14 @@
                 }
             },
         });
-        gisInited = true; console.log("GIS initialized.");
+        gisInited = true;
+        gisProgress = 50;
+        updateLoadingProgress();
+        checkApiReady();
     }
 
     function handleAuthClick() {
-        if (!gisInited || !gapiInited) {
-            Swal.fire('กรุณารอสักครู่', 'ไลบรารีกำลังโหลด...', 'info'); return;
-        }
+        if (!gapiInited || !gisInited) return;
         tokenClient.requestAccessToken({ prompt: 'consent' });
     }
 
@@ -303,7 +428,6 @@
         }
     }
 
-    // --- Data Parsing & Formatting ---
     function parseJsonString(input) { return JSON.parse(input); }
     function parsePipeString(input) {
         let processedInput = input.trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
@@ -324,232 +448,132 @@
         return result;
     }
     
-    // --- FIXED XML PARSING FUNCTION ---
     function parseXmlString(xmlString) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "application/xml");
-
-        // Check for parsing errors which DOMParser indicates with a specific tag
         if (xmlDoc.getElementsByTagName("parsererror").length) {
             const errorNode = xmlDoc.getElementsByTagName("parsererror")[0];
-            const errorText = errorNode ? errorNode.textContent : "Unknown XML parsing error.";
-            throw new Error(`Invalid XML format: ${errorText}`);
+            throw new Error(`Invalid XML format: ${errorNode ? errorNode.textContent : "Unknown XML parsing error."}`);
         }
-
-        // Recursive function to convert an XML node to a JSON object
         function xmlNodeToJson(node) {
-            // 1. Create the base object for the current node
             const obj = {};
-
-            // 2. Process attributes - they always go into the object
-            if (node.hasAttributes()) {
-                for (const attr of node.attributes) {
-                    obj[`${attr.name}`] = attr.value;
-                }
-            }
-
-            // 3. Process child elements
+            if (node.hasAttributes()) { for (const attr of node.attributes) { obj[`@${attr.name}`] = attr.value; } }
             if (node.children.length > 0) {
                 for (const child of node.children) {
                     const childName = child.tagName;
                     const childJson = xmlNodeToJson(child);
-
-                    // If the property doesn't exist yet, create it
-                    if (!obj.hasOwnProperty(childName)) {
-                        obj[childName] = childJson;
-                    } else {
-                        // If it exists, make sure it's an array and push the new child
-                        if (!Array.isArray(obj[childName])) {
-                            obj[childName] = [obj[childName]]; // Convert to array if it's not already
-                        }
+                    if (!obj.hasOwnProperty(childName)) { obj[childName] = childJson; } 
+                    else {
+                        if (!Array.isArray(obj[childName])) { obj[childName] = [obj[childName]]; }
                         obj[childName].push(childJson);
                     }
                 }
-                return obj; // When there are children, the object is the result
-            }
-
-            // 4. Process text content (only if there are no child elements)
-            const textContent = node.textContent.trim();
-            if (textContent) {
-                // If there are attributes, the text becomes a '#text' property
-                if (Object.keys(obj).length > 0) {
-                    obj['#text'] = textContent;
-                    return obj;
-                } else {
-                    // If no attributes, the node's value is just the text
-                    return textContent;
-                }
-            }
-
-            // 5. Handle empty elements (no children, no text)
-            // If it has attributes, return the object with just attributes
-            if (Object.keys(obj).length > 0) {
                 return obj;
             }
-
-            // If it's a truly empty tag like <tag/> with no attributes, return an empty string
-            return "";
+            const textContent = node.textContent.trim();
+            if (textContent) {
+                return Object.keys(obj).length > 0 ? (obj['#text'] = textContent, obj) : textContent;
+            }
+            return Object.keys(obj).length > 0 ? obj : "";
         }
-
         const rootElement = xmlDoc.documentElement;
         const result = {};
         result[rootElement.tagName] = xmlNodeToJson(rootElement);
         return result;
     }
 
-
     function recursivelyParseValues(data) {
         if (typeof data === 'string') {
             try {
-                if (data.includes('|') && data.match(/\r\n|\r|\n/)) {
-                    return parsePipeString(data);
-                }
+                if (data.includes('|') && data.match(/\r\n|\r|\n/)) { return parsePipeString(data); }
             } catch (e) { /* ignore */ }
             return data;
         } else if (Array.isArray(data)) {
             return data.map(item => recursivelyParseValues(item));
         } else if (data !== null && typeof data === 'object') {
-            const newObj = {};
-            for (const key in data) {
-                if (Object.prototype.hasOwnProperty.call(data, key)) {
-                    newObj[key] = recursivelyParseValues(data[key]);
-                }
-            }
-            return newObj;
+            return Object.fromEntries(Object.entries(data).map(([k, v]) => [k, recursivelyParseValues(v)]));
         }
         return data;
     }
 
-    // --- Core Conversion Function ---
     function convert() {
         const rawInput = $('#rawDataInput').val();
         const outputElement = $('#jsonOutput');
         const type = $('#conversionType').val();
-        
-        // Remove BOM (Byte Order Mark) and then trim whitespace
         const trimmedInput = rawInput.replace(/^\uFEFF/, '').trim();
-        
-        // Always reset data on every conversion attempt
         lastConvertedData = null;
         lastFormattedString = '';
-
         if (!trimmedInput) {
             outputElement.empty();
-            updateHighlightTheme('json'); // Reset to default theme
-            
-            // **FIX:** Reset sizes when input is cleared
-            $('#rawDataInput').removeAttr('style');
-            $('#jsonOutput').parent().parent().removeAttr('style');
-            
+            updateHighlightTheme('json');
             return;
         }
-
         try {
-            let parsedData;
-            let formattedString;
-            let language = 'json';
-
+            let parsedData, formattedString, language = 'json';
             if (type === 'auto') {
-                // Auto-detect logic
                 if (trimmedInput.startsWith('<') && trimmedInput.endsWith('>')) {
                     parsedData = parseXmlString(trimmedInput);
-                    language = 'json'; 
                 } else if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
                     parsedData = parseJsonString(trimmedInput);
                     parsedData = recursivelyParseValues(parsedData);
-                    language = 'json';
                 } else {
-                    const sqlKeywords = ['BEGIN','SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET','WITH', 'EXEC', 'EXECUTE', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'GROUP BY', 'ORDER BY', 'HAVING', 'UNION', 'UNION ALL', 'EXISTS', 'IN', 'LIKE', 'BETWEEN', 'AND', 'OR', 'NOT', 'AS', 'ON', 'VALUES', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CAST', 'CONVERT', 'TOP', 'LIMIT', 'OFFSET', 'DISTINCT', 'INDEX', 'PRIMARY KEY', 'FOREIGN KEY', 'CHECK', 'DEFAULT', 'TRIGGER', 'VIEW', 'PROCEDURE', 'FUNCTION', 'TRANSACTION', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'GRANT', 'REVOKE'];
+                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET'];
                     if (sqlKeywords.some(keyword => trimmedInput.toUpperCase().startsWith(keyword))) {
                         formattedString = sqlFormatter.format(trimmedInput, { language: 'tsql' });
                         language = 'sql';
                         lastConvertedData = { sql_query: formattedString };
                     } else {
                          parsedData = parsePipeString(trimmedInput);
-                         language = 'json';
                     }
                 }
             } else if (type === 'json-format') {
                 parsedData = parseJsonString(trimmedInput);
                 parsedData = recursivelyParseValues(parsedData);
-                language = 'json';
             } else if (type === 'sql-format') {
                 formattedString = sqlFormatter.format(trimmedInput, { language: 'tsql' });
                 language = 'sql';
                 lastConvertedData = { sql_query: formattedString };
             } else if (type === 'pipe') {
                 parsedData = parsePipeString(trimmedInput);
-                language = 'json';
             } else if (type === 'xml') {
                 parsedData = parseXmlString(trimmedInput);
-                language = 'json';
             }
-
             if (parsedData) {
                 lastConvertedData = parsedData;
                 formattedString = JSON.stringify(parsedData, null, 4);
             }
-            
             if (typeof formattedString !== 'undefined') {
                 lastFormattedString = formattedString;
                 updateHighlightTheme(language);
-                const highlighted = hljs.highlight(formattedString, { language: language, ignoreIllegals: true }).value;
-                outputElement.html(highlighted);
+                outputElement.html(hljs.highlight(formattedString, { language: language, ignoreIllegals: true }).value);
             }
-
         } catch (error) {
-            lastConvertedData = null;
-            lastFormattedString = '';
-            const errorMessage = `เกิดข้อผิดพลาด: ${error.message}\n\nกรุณาตรวจสอบข้อมูล Input หรือเปลี่ยนประเภทการแปลง`;
-            outputElement.html(`<span class="text-red-500 dark:text-red-400">${errorMessage}</span>`);
+            outputElement.html(`<span class="text-red-500 dark:text-red-400">${error.message.replace(/\n/g, '<br>')}</span>`);
         }
     }
 
-    // --- Data Export & Upload ---
     async function exportLocal() {
         if (!lastFormattedString) {
             Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการ Export', 'warning');
             return;
         }
-
-        const conversionType = $('#conversionType').val();
-        const isSqlFormat = conversionType === 'sql-format' || (conversionType === 'auto' && lastConvertedData?.sql_query);
-
-        if (isSqlFormat) {
-            // Directly download as .sql file
-            downloadBlob(new Blob([lastFormattedString], { type: 'text/sql;charset=utf-8' }), `query_${new Date().getTime()}.sql`);
+        const isSql = $('#conversionType').val() === 'sql-format' || (lastConvertedData && lastConvertedData.sql_query);
+        if (isSql) {
+            downloadBlob(new Blob([lastFormattedString], { type: 'text/sql;charset=utf-8' }), `query_${Date.now()}.sql`);
         } else {
-            // Show options for other types
             const { value: fileType } = await Swal.fire({
-                title: 'เลือกรูปแบบไฟล์',
-                input: 'radio',
-                inputOptions: {
-                    json: 'JSON',
-                    xlsx: 'Excel (XLSX)'
-                },
-                inputValidator: (value) => {
-                    if (!value) {
-                        return 'คุณต้องเลือกรูปแบบไฟล์!'
-                    }
-                }
+                title: 'เลือกรูปแบบไฟล์', input: 'radio',
+                inputOptions: { json: 'JSON', xlsx: 'Excel (XLSX)' },
+                inputValidator: (v) => !v && 'คุณต้องเลือกรูปแบบไฟล์!'
             });
-
-            if (fileType) {
-                if (fileType === 'json') {
-                    downloadBlob(new Blob([lastFormattedString], { type: 'application/json;charset=utf-8' }), `data_${new Date().getTime()}.json`);
-                } else if (fileType === 'xlsx') {
-                    if (!lastConvertedData) {
-                         Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่แปลงแล้วสำหรับสร้างไฟล์ Excel', 'warning');
-                         return;
-                    }
-                    try {
-                        const blob = createExcelBlob();
-                        if (blob) {
-                            downloadBlob(blob, `ExportedData_${new Date().getTime()}.xlsx`);
-                        }
-                    } catch (error) {
-                         Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถสร้างไฟล์ Excel ได้: ${error.message}`, 'error');
-                    }
+            if (fileType === 'json') {
+                downloadBlob(new Blob([lastFormattedString], { type: 'application/json;charset=utf-8' }), `data_${Date.now()}.json`);
+            } else if (fileType === 'xlsx') {
+                try {
+                    const blob = createExcelBlob();
+                    if (blob) downloadBlob(blob, `ExportedData_${Date.now()}.xlsx`);
+                } catch (error) {
+                     Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถสร้างไฟล์ Excel ได้: ${error.message}`, 'error');
                 }
             }
         }
@@ -558,50 +582,35 @@
     function downloadBlob(blob, fileName) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.style.display = 'none';
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
         a.remove();
+        URL.revokeObjectURL(url);
     }
 
     function createExcelBlob() {
         if (!lastConvertedData) {
-            Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลสำหรับสร้างไฟล์ Excel', 'warning');
-            return null;
+            Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลสำหรับสร้างไฟล์ Excel', 'warning'); return null;
         }
-        let dataForSheet, headerOrder = [];
         let dataToProcess = JSON.parse(JSON.stringify(lastConvertedData));
-        if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => typeof item === 'object' && item !== null && 'Key' in item)) {
+        if (Array.isArray(dataToProcess) && dataToProcess.length > 0 && dataToProcess.every(item => item && 'Key' in item)) {
             dataToProcess = dataToProcess.reduce((obj, item) => { obj[item.Key] = item.Value; return obj; }, {});
         }
         const keys = Object.keys(dataToProcess);
-        if (keys.length === 1 && typeof dataToProcess[keys[0]] === 'object' && dataToProcess[keys[0]] !== null) {
+        if (keys.length === 1 && typeof dataToProcess[keys[0]] === 'object') {
             dataToProcess = dataToProcess[keys[0]];
         }
         if (dataToProcess?.parameter?.par) {
             dataToProcess.parameter.par.forEach(p => { if (p?.name) { dataToProcess[p.name] = p.value || ''; } });
             delete dataToProcess.parameter;
         }
-        if (Array.isArray(dataToProcess)) {
-            dataForSheet = dataToProcess;
-            if (dataForSheet.length > 0) {
-                headerOrder = Object.keys(dataForSheet.reduce((a, b) => (Object.keys(a || {}).length > Object.keys(b || {}).length ? a : b), {}));
-            }
-        } else if (typeof dataToProcess === 'object' && dataToProcess !== null) {
-            headerOrder = Object.keys(dataToProcess);
-            dataForSheet = [dataToProcess];
-        } else {
-            dataForSheet = [{ Value: dataToProcess }];
-            headerOrder = ['Value'];
+        const dataForSheet = Array.isArray(dataToProcess) ? dataToProcess : [dataToProcess];
+        if (dataForSheet.length === 0) {
+            Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่สามารถส่งออกเป็น Excel ได้', 'warning'); return null;
         }
-        if (!dataForSheet || dataForSheet.length === 0) {
-            Swal.fire('ไม่มีข้อมูล', 'ไม่มีข้อมูลที่สามารถส่งออกเป็น Excel ได้', 'warning');
-            return null;
-        }
-        const worksheet = XLSX.utils.json_to_sheet(dataForSheet, { header: headerOrder });
+        const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
         const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
@@ -610,91 +619,63 @@
 
     async function exportAndUploadToDrive() {
         if (!gapi.client.getToken()) {
-            Swal.fire('ข้อผิดพลาด', 'กรุณาลงชื่อเข้าใช้ Google ก่อน', 'error');
-            return;
+            Swal.fire('ข้อผิดพลาด', 'กรุณาลงชื่อเข้าใช้ Google ก่อน', 'error'); return;
         }
         if (!lastFormattedString) {
-            Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการอัปโหลด', 'warning');
-            return;
+            Swal.fire('ไม่มีข้อมูล', 'กรุณาแปลงข้อมูลก่อนทำการอัปโหลด', 'warning'); return;
         }
-
-        const conversionType = $('#conversionType').val();
-        const isSqlFormat = conversionType === 'sql-format' || (conversionType === 'auto' && lastConvertedData?.sql_query);
-
-        Swal.fire({
-            title: 'กำลังเตรียมไฟล์...',
-            text: 'กรุณารอสักครู่',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
-
+        Swal.fire({ title: 'กำลังเตรียมไฟล์...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         try {
-            let blob;
-            let fileName;
-
-            if (isSqlFormat) {
-                blob = new Blob([lastFormattedString], { type: 'text/sql;charset=utf-8' });
-                fileName = `query_${new Date().getTime()}.sql`;
-            } else {
-                // Default to Excel for other types
-                blob = createExcelBlob();
-                if (!blob) return; // Error is handled inside createExcelBlob
-                fileName = `ExportedData_${new Date().getTime()}.xlsx`;
-            }
-
+            const isSql = $('#conversionType').val() === 'sql-format' || (lastConvertedData && lastConvertedData.sql_query);
+            const blob = isSql ? new Blob([lastFormattedString], { type: 'text/sql;charset=utf-8' }) : createExcelBlob();
+            const fileName = isSql ? `query_${Date.now()}.sql` : `ExportedData_${Date.now()}.xlsx`;
+            if (!blob) return;
             Swal.update({ title: 'กำลังค้นหาโฟลเดอร์ใน Google Drive...' });
             const folderId = await getOrCreateFolderId();
-            Swal.update({ title: 'กำลังอัปโหลดไฟล์...', text: 'กรุณาอย่าปิดหน้าต่างนี้' });
-            
+            Swal.update({ title: 'กำลังอัปโหลดไฟล์...' });
             await uploadFileToDrive(folderId, blob, fileName);
-            Swal.fire('สำเร็จ!', `ไฟล์ "${fileName}" ถูกอัปโหลดไปยังโฟลเดอร์ "${FOLDER_NAME}" ใน Google Drive ของคุณแล้ว`, 'success');
+            Swal.fire('สำเร็จ!', `ไฟล์ "${fileName}" ถูกอัปโหลดไปยังโฟลเดอร์ "${FOLDER_NAME}" แล้ว`, 'success');
         } catch (error) {
-            console.error('Upload Error:', error);
             Swal.fire('เกิดข้อผิดพลาด', `ไม่สามารถอัปโหลดไฟล์ได้: ${error.message || JSON.stringify(error)}`, 'error');
         }
     }
 
-
     async function getOrCreateFolderId() {
-        const response = await gapi.client.drive.files.list({
+        const res = await gapi.client.drive.files.list({
             q: `mimeType='application/vnd.google-apps.folder' and name='${FOLDER_NAME}' and trashed=false`,
-            fields: 'files(id, name)', spaces: 'drive'
+            fields: 'files(id)', spaces: 'drive'
         });
-        if (response.result.files.length > 0) return response.result.files[0].id;
-        const createResponse = await gapi.client.drive.files.create({ resource: { 'name': FOLDER_NAME, 'mimeType': 'application/vnd.google-apps.folder' }, fields: 'id' });
-        return createResponse.result.id;
+        if (res.result.files.length > 0) return res.result.files[0].id;
+        const createRes = await gapi.client.drive.files.create({ resource: { 'name': FOLDER_NAME, 'mimeType': 'application/vnd.google-apps.folder' }, fields: 'id' });
+        return createRes.result.id;
     }
 
     function uploadFileToDrive(folderId, blob, fileName) {
-        return new Promise((resolve, reject) => {
-            const metadata = { name: fileName, parents: [folderId], mimeType: blob.type };
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', blob);
-            const accessToken = gapi.client.getToken().access_token;
-            fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                method: 'POST',
-                headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-                body: form,
-            }).then(res => res.ok ? res.json() : res.json().then(err => reject(err)))
-              .then(val => resolve(val)).catch(err => reject(err));
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }));
+        form.append('file', blob);
+        return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + gapi.client.getToken().access_token },
+            body: form,
+        }).then(res => {
+            if (!res.ok) return res.json().then(err => Promise.reject(err));
+            return res.json();
         });
     }
 
-    // --- Helper Functions ---
     function clearAll() {
-        // **FIX:** Set value to empty and trigger the input event, 
-        // which will handle clearing the output and resetting sizes.
         $('#rawDataInput').val('').trigger('input');
     }
 
     function copyOutput() {
-        if (lastFormattedString && !lastFormattedString.startsWith('เกิดข้อผิดพลาด')) {
+        if (lastFormattedString) {
             navigator.clipboard.writeText(lastFormattedString).then(() => {
-                const originalText = $('#copyBtn').text();
-                $('#copyBtn').text('คัดลอกแล้ว!');
-                setTimeout(() => { $('#copyBtn').text(originalText); }, 2000);
-            }).catch(err => Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถคัดลอกได้', 'error'));
+                const copyBtn = $('#copyBtn');
+                const originalContent = copyBtn.html();
+                copyBtn.html('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425a.247.247 0 0 1 .02-.022z"/></svg> <span>คัดลอกแล้ว!</span>');
+                setTimeout(() => copyBtn.html(originalContent), 2000);
+            }).catch(() => Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถคัดลอกได้', 'error'));
         }
     }
     </script>
