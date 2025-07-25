@@ -38,9 +38,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Google API Scripts -->
-    <script src="https://apis.google.com/js/api.js?onload=gapiLoaded" async defer></script>
-    <script src="https://accounts.google.com/gsi/client?onload=onGoogleLibraryLoad" async defer></script>
+    <!-- Google API Scripts (REVISED: Removed onload callback for more robust initialization) -->
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
         body {
@@ -195,6 +195,7 @@
     // JAVASCRIPT LOGIC
     // ===================================================================================
 
+    // --- Google Drive API Configuration ---
     const API_KEY = 'AIzaSyCShTHlV2oFr7QMNetG81V_x99zeDXBUtU'; 
     const CLIENT_ID = '839014236860-pfb60nkl7klpej2bf67tsh5qhjnttei9.apps.googleusercontent.com';
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -207,7 +208,6 @@
     let lastFormattedString = '';
     let apiLoadTimeout;
 
-    // --- Loading Progress Variables ---
     let gapiProgress = 0;
     let gisProgress = 0;
 
@@ -260,24 +260,78 @@
         }
     }
 
+    // --- NEW: Robust initialization functions ---
+    function gapiInit() {
+        gapi.load('client', () => {
+            gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] })
+              .then(() => {
+                  gapiInited = true;
+                  gapiProgress = 50;
+                  updateLoadingProgress();
+                  checkApiReady();
+              })
+              .catch(err => Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error'));
+        });
+    }
+
+    function gisInit() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID, scope: SCOPES,
+            callback: (tokenResponse) => {
+                if (tokenResponse.error) {
+                    Swal.fire('เกิดข้อผิดพลาดในการยืนยันตัวตน', `Google แจ้งว่า: ${tokenResponse.error_description || tokenResponse.error}`, 'error');
+                    updateSigninStatus(false);
+                } else if (tokenResponse.access_token) {
+                    gapi.client.setToken(tokenResponse);
+                    updateSigninStatus(true);
+                } else {
+                    Swal.fire('เกิดข้อผิดพลาด', 'ไม่ได้รับ Access Token จาก Google', 'error');
+                    updateSigninStatus(false);
+                }
+            },
+        });
+        gisInited = true;
+        gisProgress = 50;
+        updateLoadingProgress();
+        checkApiReady();
+    }
+
+
     $(document).ready(function() {
+        // Safety timeout remains
         apiLoadTimeout = setTimeout(() => {
             if (!gapiInited || !gisInited) {
                 $('#loading-overlay').fadeOut();
                 Swal.fire({
                     icon: 'error',
                     title: 'การโหลดล้มเหลว',
-                    html: `ไม่สามารถเชื่อมต่อกับระบบของ Google ได้<br><br>
-                           <b>สาเหตุที่เป็นไปได้:</b> การตั้งค่า Google Client ID ของคุณไม่ถูกต้อง<br><br>
-                           <b>วิธีแก้ไข:</b><br>
-                           1. ไปที่ Google Cloud Console<br>
-                           2. ในส่วน Credentials > OAuth 2.0 Client IDs<br>
-                           3. เพิ่ม <b>${window.location.origin}</b> ใน 'Authorized JavaScript origins'`,
+                    html: `ไม่สามารถเชื่อมต่อกับระบบของ Google ได้ภายใน 15 วินาที<br><br>
+                           <b>สาเหตุหลัก:</b> การตั้งค่า 'Authorized JavaScript origins' ใน Google Cloud Console ไม่ถูกต้อง<br><br>
+                           <b>ขั้นตอนการแก้ไขที่จำเป็น:</b><br>
+                           1. ไปที่ Google Cloud Console ของคุณ<br>
+                           2. ไปที่หน้า <b>APIs & Services > Credentials</b><br>
+                           3. คลิกที่ชื่อ Client ID ของคุณ (<code>${CLIENT_ID}</code>)<br>
+                           4. ในหัวข้อ <b>Authorized JavaScript origins</b> ให้กด <b>ADD URI</b><br>
+                           5. เพิ่ม URL ปัจจุบันของคุณ: <b>${window.location.origin}</b><br><br>
+                           หลังจากบันทึกแล้ว ให้รีเฟรชหน้านี้อีกครั้ง`,
                     confirmButtonText: 'เข้าใจแล้ว'
                 });
             }
         }, 15000);
 
+        // --- NEW: Polling initializer to robustly wait for scripts ---
+        function pollForGoogleApis() {
+            if (window.gapi && window.google && window.google.accounts) {
+                console.log("Google script objects found. Initializing...");
+                gapiInit();
+                gisInit();
+            } else {
+                setTimeout(pollForGoogleApis, 100);
+            }
+        }
+        pollForGoogleApis(); // Start the initialization
+
+        // --- The rest of the setup ---
         const savedTheme = localStorage.getItem('color-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         setAppTheme(savedTheme);
 
@@ -345,8 +399,11 @@
     });
     
     function togglePromptVisibility() {
-        if ($('#rawDataInput').val()) $('#drop-zone-prompt').hide();
-        else $('#drop-zone-prompt').show();
+        if ($('#rawDataInput').val()) {
+            $('#drop-zone-prompt').hide();
+        } else {
+            $('#drop-zone-prompt').show();
+        }
     }
     
     function handleTextInput() {
@@ -358,7 +415,9 @@
         if (files.length > 0) {
             const file = files[0];
             const reader = new FileReader();
-            reader.onload = (e) => $('#rawDataInput').val(e.target.result).trigger('input');
+            reader.onload = (e) => {
+                $('#rawDataInput').val(e.target.result).trigger('input');
+            };
             reader.onerror = () => Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ได้', 'error');
             reader.readAsText(file);
         }
@@ -376,41 +435,6 @@
             uploadButton.prop('disabled', true).addClass('opacity-50');
             authStatusDiv.text('กรุณาลงชื่อเข้าใช้ Google เพื่ออัปโหลดไฟล์').removeClass('text-green-500 dark:text-green-400').addClass('text-slate-500 dark:text-slate-400');
         }
-    }
-
-    function gapiLoaded() {
-        gapi.load('client', () => {
-            gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] })
-              .then(() => {
-                  gapiInited = true;
-                  gapiProgress = 50;
-                  updateLoadingProgress();
-                  checkApiReady();
-              })
-              .catch(err => Swal.fire('GAPI Error', `เกิดข้อผิดพลาดในการโหลด Google API Client: ${JSON.stringify(err)}`, 'error'));
-        });
-    }
-
-    function onGoogleLibraryLoad() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID, scope: SCOPES,
-            callback: (tokenResponse) => {
-                if (tokenResponse.error) {
-                    Swal.fire('เกิดข้อผิดพลาดในการยืนยันตัวตน', `Google แจ้งว่า: ${tokenResponse.error_description || tokenResponse.error}`, 'error');
-                    updateSigninStatus(false);
-                } else if (tokenResponse.access_token) {
-                    gapi.client.setToken(tokenResponse);
-                    updateSigninStatus(true);
-                } else {
-                    Swal.fire('เกิดข้อผิดพลาด', 'ไม่ได้รับ Access Token จาก Google', 'error');
-                    updateSigninStatus(false);
-                }
-            },
-        });
-        gisInited = true;
-        gisProgress = 50;
-        updateLoadingProgress();
-        checkApiReady();
     }
 
     function handleAuthClick() {
@@ -517,7 +541,7 @@
                     parsedData = parseJsonString(trimmedInput);
                     parsedData = recursivelyParseValues(parsedData);
                 } else {
-                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET'];
+                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'DECLARE', 'SET', 'WITH', 'EXEC', 'EXECUTE'];
                     if (sqlKeywords.some(keyword => trimmedInput.toUpperCase().startsWith(keyword))) {
                         formattedString = sqlFormatter.format(trimmedInput, { language: 'tsql' });
                         language = 'sql';
