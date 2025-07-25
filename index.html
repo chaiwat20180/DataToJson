@@ -724,12 +724,11 @@
         const processedSheetData = finalSheetData.map(row => {
             const newRow = {};
             for (const key in row) {
-                // if (typeof row[key] === 'string') {
-                //     newRow[key] = row[key].replace(/\\/g, '\\\\');
-                // } else {
-                //     newRow[key] = row[key];
-                // }
-                newRow[key] = row[key];
+                if (typeof row[key] === 'string') {
+                    newRow[key] = row[key].replace(/\\/g, '\\\\');
+                } else {
+                    newRow[key] = row[key];
+                }
             }
             return newRow;
         });
