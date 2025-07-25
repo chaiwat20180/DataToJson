@@ -721,17 +721,17 @@
         }
         
         // Final processing for backslashes
-        const processedSheetData = finalSheetData.map(row => {
-            const newRow = {};
-            for (const key in row) {
-                if (typeof row[key] === 'string') {
-                    newRow[key] = row[key].replace(/\\/g, '\\\\');
-                } else {
-                    newRow[key] = row[key];
-                }
-            }
-            return newRow;
-        });
+        // const processedSheetData = finalSheetData.map(row => {
+        //     const newRow = {};
+        //     for (const key in row) {
+        //         if (typeof row[key] === 'string') {
+        //             newRow[key] = row[key].replace(/\\/g, '\\\\');
+        //         } else {
+        //             newRow[key] = row[key];
+        //         }
+        //     }
+        //     return newRow;
+        // });
 
         const worksheet = XLSX.utils.json_to_sheet(processedSheetData);
         const workbook = XLSX.utils.book_new();
